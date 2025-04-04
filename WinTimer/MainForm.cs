@@ -10,7 +10,6 @@ public class MainForm : Form
     #region Constants
     private const int BASE_WIDTH = 420;
     private const int BASE_HEIGHT = 220;
-    private const int BASE_FONT_SIZE = 40;
     private const int BASE_BUTTON_FONT_SIZE = 14;
     private const int RESIZE_BORDER = 5;
     private const float ASPECT_RATIO = BASE_WIDTH / (float)BASE_HEIGHT;
@@ -50,6 +49,11 @@ public class MainForm : Form
     private Button btnReset;
     private Button btnTopMost;
     private Button btnClose;
+
+    // Стрелки для настройки таймера
+    private Button[] upArrows;
+    private Button[] downArrows;
+    private bool isTimerSetupMode = false;
     #endregion
 
     #region State Variables
@@ -274,6 +278,10 @@ public class MainForm : Form
         secondDigits = new FlipDigit[2];
         separators = new Label[2];
         
+        // Создаем стрелки для настройки таймера
+        upArrows = new Button[6]; // По стрелке для каждой цифры
+        downArrows = new Button[6];
+        
         // Create individual digits
         for (int i = 0; i < 2; i++)
         {
@@ -335,189 +343,144 @@ public class MainForm : Form
             AddHandlers(separators[i]);
         }
         
+        // Создаем стрелки для изменения значений таймера
+        CreateTimerArrows();
+        
         // Position all display elements
         LayoutTimeDisplay(1.0f);
     }
 
-    private void InitializeControlPanel()
+    private void CreateTimerArrows()
     {
-        // Control panel at the bottom
-        pnlControls = new Panel
+        // Создаем стрелки для увеличения значений (вверх)
+        for (int i = 0; i < 6; i++)
         {
-            Dock = DockStyle.Bottom,
-            Height = 50,
-            BackColor = Color.FromArgb(15, 15, 15)
-        };
-        
-        pnlControls.Paint += (s, e) => {
-            using (var brush = new LinearGradientBrush(
-                pnlControls.ClientRectangle,
-                Color.FromArgb(20, 20, 20), 
-                Color.FromArgb(5, 5, 5),
-                LinearGradientMode.Vertical))
+            upArrows[i] = new Button
             {
-                e.Graphics.FillRectangle(brush, pnlControls.ClientRectangle);
-            }
+                Text = "▲",
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(20, 20, 20),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new Font("Segoe UI Symbol", 8, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(35, 20),
+                Visible = false, // Изначально скрыты
+                TabStop = false
+            };
             
-            using (var pen = new Pen(Color.FromArgb(30, 30, 30), 1))
+            upArrows[i].FlatAppearance.BorderSize = 0;
+            upArrows[i].FlatAppearance.MouseOverBackColor = Color.FromArgb(50, 50, 60);
+            
+            int index = i; // Для использования в лямбда-выражении
+            upArrows[i].Click += (s, e) => {
+                if (isTimerSetupMode)
+                {
+                    IncreaseTimerDigit(index);
+                }
+            };
+            
+            pnlTimeDisplay.Controls.Add(upArrows[i]);
+        }
+        
+        // Создаем стрелки для уменьшения значений (вниз)
+        for (int i = 0; i < 6; i++)
+        {
+            downArrows[i] = new Button
             {
-                e.Graphics.DrawLine(pen, 0, 0, pnlControls.Width, 0);
-            }
-        };
-        
-        AddHandlers(pnlControls);
-        
-        // Create all buttons with centered icons
-        btnClock = CreateButton("🕒");
-        btnTimer = CreateButton("⏱️");
-        btnStopwatch = CreateButton("⏲️");
-        btnStart = CreateButton("▶️");
-        btnPause = CreateButton("⏸️");
-        btnReset = CreateButton("🔄");
-        btnTopMost = CreateButton("📌");
-        btnClose = CreateButton("✖");
-        
-        // Add all buttons to panel
-        pnlControls.Controls.Add(btnClock);
-        pnlControls.Controls.Add(btnTimer);
-        pnlControls.Controls.Add(btnStopwatch);
-        pnlControls.Controls.Add(btnStart);
-        pnlControls.Controls.Add(btnPause);
-        pnlControls.Controls.Add(btnReset);
-        pnlControls.Controls.Add(btnTopMost);
-        pnlControls.Controls.Add(btnClose);
-        
-        // Position buttons
-        LayoutControlPanel(1.0f);
-        
-        // Initial button state
-        UpdateButtonStates();
-        
-        // Attach event handlers
-        btnClock.Click += (s, e) => SwitchToClockMode();
-        btnTimer.Click += BtnTimer_Click;
-        btnStopwatch.Click += (s, e) => SwitchToStopwatchMode();
-        btnStart.Click += BtnStart_Click;
-        btnPause.Click += BtnPause_Click;
-        btnReset.Click += BtnReset_Click;
-        btnTopMost.Click += BtnTopMost_Click;
-        btnClose.Click += (s, e) => this.Close();
-        
-        // Create timer context menu
-        InitializeTimerContextMenu();
+                Text = "▼",
+                FlatStyle = FlatStyle.Flat,
+                BackColor = Color.FromArgb(20, 20, 20),
+                ForeColor = Color.FromArgb(100, 100, 100),
+                Font = new Font("Segoe UI Symbol", 8, FontStyle.Bold),
+                TextAlign = ContentAlignment.MiddleCenter,
+                Size = new Size(35, 20),
+                Visible = false, // Изначально скрыты
+                TabStop = false
+            };
+            
+            downArrows[i].FlatAppearance.BorderSize = 0;
+            downArrows[i].FlatAppearance.MouseOverBackColor = Color.FromArgb(50, 50, 60);
+            
+            int index = i; // Для использования в лямбда-выражении
+            downArrows[i].Click += (s, e) => {
+                if (isTimerSetupMode)
+                {
+                    DecreaseTimerDigit(index);
+                }
+            };
+            
+            pnlTimeDisplay.Controls.Add(downArrows[i]);
+        }
     }
 
-    private void InitializeTimerContextMenu()
+    private void IncreaseTimerDigit(int index)
     {
-        ContextMenuStrip timerMenu = new ContextMenuStrip();
-        timerMenu.Items.Add("1 минута", null, TimerMenuItem_Click);
-        timerMenu.Items.Add("5 минут", null, TimerMenuItem_Click);
-        timerMenu.Items.Add("10 минут", null, TimerMenuItem_Click);
-        timerMenu.Items.Add("15 минут", null, TimerMenuItem_Click);
-        timerMenu.Items.Add("30 минут", null, TimerMenuItem_Click);
-        timerMenu.Items.Add("1 час", null, TimerMenuItem_Click);
-        btnTimer.ContextMenuStrip = timerMenu;
-    }
-    
-    private void InitializeTimers()
-    {
-        // Clock timer
-        timerClock = new Timer
+        // Определяем, какую цифру изменяем
+        switch (index)
         {
-            Interval = 1000
-        };
-        timerClock.Tick += TimerClock_Tick;
-        timerClock.Start();
+            case 0: // Десятки часов
+                if (countdownTime.Hours < 90) // Ограничение на 99 часов
+                    countdownTime = countdownTime.Add(TimeSpan.FromHours(10));
+                break;
+            case 1: // Единицы часов
+                if (countdownTime.Hours % 10 < 9)
+                    countdownTime = countdownTime.Add(TimeSpan.FromHours(1));
+                break;
+            case 2: // Десятки минут
+                if (countdownTime.Minutes < 50)
+                    countdownTime = countdownTime.Add(TimeSpan.FromMinutes(10));
+                break;
+            case 3: // Единицы минут
+                if (countdownTime.Minutes % 10 < 9)
+                    countdownTime = countdownTime.Add(TimeSpan.FromMinutes(1));
+                break;
+            case 4: // Десятки секунд
+                if (countdownTime.Seconds < 50)
+                    countdownTime = countdownTime.Add(TimeSpan.FromSeconds(10));
+                break;
+            case 5: // Единицы секунд
+                if (countdownTime.Seconds % 10 < 9)
+                    countdownTime = countdownTime.Add(TimeSpan.FromSeconds(1));
+                break;
+        }
         
-        // Countdown timer
-        timerCountdown = new Timer
-        {
-            Interval = 1000
-        };
-        timerCountdown.Tick += TimerCountdown_Tick;
-        
-        // Stopwatch timer
-        timerStopwatch = new Timer
-        {
-            Interval = 1000
-        };
-        timerStopwatch.Tick += TimerStopwatch_Tick;
+        UpdateDisplay();
     }
-    #endregion
 
-    #region UI Helpers
-    private void ScaleButton(Button? button, float scale)
+    private void DecreaseTimerDigit(int index)
     {
-        if (button == null) return;
-        
-        // Приведем в соответствие с размерами из LayoutControlPanel
-        button.Width = (int)(42 * scale);   // Было 45
-        button.Height = (int)(35 * scale);
-        
-        // Размер шрифта кнопок
-        float fontSize = BASE_BUTTON_FONT_SIZE * scale * 1.1f;
-        button.Font = new Font(button.Font.FontFamily, fontSize, FontStyle.Regular);
-    }
-    
-    public Button CreateButton(string text)
-    {
-        var button = new Button
+        // Определяем, какую цифру изменяем
+        switch (index)
         {
-            Text = text,
-            Width = (int)(42),
-            Height = (int)(35),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(20, 20, 20),
-            ForeColor = Color.FromArgb(200, 200, 200),
-            Margin = new Padding(0),
-            Font = BUTTON_FONT,
-            TextAlign = ContentAlignment.MiddleCenter,
-            Padding = new Padding(2, 0, 0, 1),
-            FlatAppearance =
-            {
-                BorderSize = 0,
-                MouseOverBackColor = Color.FromArgb(40, 40, 40),
-                MouseDownBackColor = Color.FromArgb(60, 60, 60)
-            }
-        };
+            case 0: // Десятки часов
+                if (countdownTime.Hours >= 10)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromHours(10));
+                break;
+            case 1: // Единицы часов
+                if (countdownTime.Hours % 10 > 0 || countdownTime.Hours > 0)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromHours(1));
+                break;
+            case 2: // Десятки минут
+                if (countdownTime.Minutes >= 10)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromMinutes(10));
+                break;
+            case 3: // Единицы минут
+                if (countdownTime.Minutes % 10 > 0 || countdownTime.Minutes > 0)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromMinutes(1));
+                break;
+            case 4: // Десятки секунд
+                if (countdownTime.Seconds >= 10)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromSeconds(10));
+                break;
+            case 5: // Единицы секунд
+                if (countdownTime.Seconds % 10 > 0 || countdownTime.Seconds > 0)
+                    countdownTime = countdownTime.Subtract(TimeSpan.FromSeconds(1));
+                break;
+        }
         
-        button.Paint += (s, e) => {
-            e.Graphics.Clear(button.BackColor);
-            
-            using (StringFormat sf = new StringFormat())
-            {
-                sf.Alignment = StringAlignment.Center;
-                sf.LineAlignment = StringAlignment.Center;
-                
-                RectangleF textRect = new RectangleF(1, -1, button.Width - 1, button.Height - 1);
-                e.Graphics.DrawString(button.Text, button.Font, new SolidBrush(button.ForeColor), textRect, sf);
-            }
-        };
-        
-        button.MouseEnter += (s, e) => {
-            button.ForeColor = Color.FromArgb(255, 255, 255);
-            button.Invalidate();
-        };
-        
-        button.MouseLeave += (s, e) => {
-            if (button == btnClock && currentMode == Mode.Clock ||
-                button == btnTimer && currentMode == Mode.Timer ||
-                button == btnStopwatch && currentMode == Mode.Stopwatch ||
-                button == btnTopMost && this.TopMost)
-            {
-                button.ForeColor = Color.White;
-            }
-            else
-            {
-                button.ForeColor = Color.FromArgb(200, 200, 200);
-            }
-            button.Invalidate();
-        };
-        
-        AddHandlers(button);
-        return button;
+        UpdateDisplay();
     }
-    
+
     private void LayoutTimeDisplay(float scale)
     {
         if (pnlTimeDisplay.Width <= 0 || pnlTimeDisplay.Height <= 0)
@@ -528,8 +491,8 @@ public class MainForm : Form
         }
         
         // Оптимизируем размер цифр для новой ширины
-        int digitWidth = (int)(60 * scale);  // Увеличиваем с 48 до 60
-        int digitHeight = (int)(90 * scale); // Увеличиваем с 75 до 90
+        int digitWidth = (int)(60 * scale);
+        int digitHeight = (int)(90 * scale);
         int separatorWidth = (int)(18 * scale);
         int totalWidth = 6 * digitWidth + 2 * separatorWidth;
         
@@ -539,20 +502,37 @@ public class MainForm : Form
         
         int x = startX;
         
+        // Размер стрелок
+        int arrowWidth = (int)(35 * scale);
+        int arrowHeight = (int)(20 * scale);
+        
+        // Текущий индекс для стрелок
+        int arrowIndex = 0;
+        
         // Position hour digits
         for (int i = 0; i < 2; i++)
         {
             hourDigits[i].Width = digitWidth;
             hourDigits[i].Height = digitHeight;
             hourDigits[i].Location = new Point(x, y);
+            
+            // Позиционируем стрелки над и под цифрами
+            upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
+            upArrows[arrowIndex].Width = arrowWidth;
+            upArrows[arrowIndex].Height = arrowHeight;
+            
+            downArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y + digitHeight + 5);
+            downArrows[arrowIndex].Width = arrowWidth;
+            downArrows[arrowIndex].Height = arrowHeight;
+            
             x += digitWidth;
+            arrowIndex++;
         }
         
         // First separator
         separators[0].Width = separatorWidth;
         separators[0].Height = digitHeight;
         separators[0].Location = new Point(x, y);
-        // Больше не устанавливаем шрифт и текст, так как рисуем точки вручную
         x += separatorWidth;
         
         // Position minute digits
@@ -561,14 +541,24 @@ public class MainForm : Form
             minuteDigits[i].Width = digitWidth;
             minuteDigits[i].Height = digitHeight;
             minuteDigits[i].Location = new Point(x, y);
+            
+            // Позиционируем стрелки над и под цифрами
+            upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
+            upArrows[arrowIndex].Width = arrowWidth;
+            upArrows[arrowIndex].Height = arrowHeight;
+            
+            downArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y + digitHeight + 5);
+            downArrows[arrowIndex].Width = arrowWidth;
+            downArrows[arrowIndex].Height = arrowHeight;
+            
             x += digitWidth;
+            arrowIndex++;
         }
         
         // Second separator
         separators[1].Width = separatorWidth;
         separators[1].Height = digitHeight;
         separators[1].Location = new Point(x, y);
-        // Больше не устанавливаем шрифт и текст, так как рисуем точки вручную
         x += separatorWidth;
         
         // Position second digits
@@ -577,7 +567,18 @@ public class MainForm : Form
             secondDigits[i].Width = digitWidth;
             secondDigits[i].Height = digitHeight;
             secondDigits[i].Location = new Point(x, y);
+            
+            // Позиционируем стрелки над и под цифрами
+            upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
+            upArrows[arrowIndex].Width = arrowWidth;
+            upArrows[arrowIndex].Height = arrowHeight;
+            
+            downArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y + digitHeight + 5);
+            downArrows[arrowIndex].Width = arrowWidth;
+            downArrows[arrowIndex].Height = arrowHeight;
+            
             x += digitWidth;
+            arrowIndex++;
         }
         
         // После изменения размеров принудительно перерисовываем разделители
@@ -664,6 +665,26 @@ public class MainForm : Form
         
         // Resize and reposition all digits and separators
         LayoutTimeDisplay(scale);
+        
+        // Scale the timer arrows if they exist
+        if (upArrows != null && downArrows != null)
+        {
+            foreach (var arrow in upArrows)
+            {
+                if (arrow != null)
+                {
+                    arrow.Font = new Font("Segoe UI Symbol", 8 * scale, FontStyle.Bold);
+                }
+            }
+            
+            foreach (var arrow in downArrows)
+            {
+                if (arrow != null)
+                {
+                    arrow.Font = new Font("Segoe UI Symbol", 8 * scale, FontStyle.Bold);
+                }
+            }
+        }
     }
     
     private void ScaleControlPanel(float scale)
@@ -710,6 +731,9 @@ public class MainForm : Form
             // Notify when timer completes
             this.FlashWindow();
             MessageBox.Show("Время истекло!", "WinTimer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            
+            // Возвращаемся в режим настройки таймера
+            SetTimerSetupMode(true);
         }
         
         UpdateDisplay();
@@ -729,6 +753,9 @@ public class MainForm : Form
         timerCountdown?.Stop();
         timerStopwatch?.Stop();
         timerClock?.Start();
+        
+        // Скрываем стрелки настройки таймера при выходе из режима таймера
+        SetTimerSetupMode(false);
         
         UpdateButtonStates();
         UpdateDisplay();
@@ -750,6 +777,9 @@ public class MainForm : Form
         timerClock?.Stop();
         timerCountdown?.Stop();
         
+        // Скрываем стрелки настройки таймера при выходе из режима таймера
+        SetTimerSetupMode(false);
+        
         UpdateButtonStates();
         UpdateDisplay();
     }
@@ -770,6 +800,20 @@ public class MainForm : Form
                 btnStart.Visible = false;
                 btnPause.Visible = false;
                 btnReset.Visible = false;
+                
+                // Скрываем стрелки настройки таймера в режиме часов
+                if (upArrows != null && downArrows != null)
+                {
+                    foreach (var arrow in upArrows)
+                    {
+                        if (arrow != null) arrow.Visible = false;
+                    }
+                    
+                    foreach (var arrow in downArrows)
+                    {
+                        if (arrow != null) arrow.Visible = false;
+                    }
+                }
                 break;
                 
             case Mode.Timer:
@@ -784,6 +828,20 @@ public class MainForm : Form
                 btnStart.Enabled = !isRunning;
                 btnPause.Enabled = isRunning;
                 btnReset.Enabled = true;
+                
+                // В режиме секундомера стрелки тоже должны быть скрыты
+                if (currentMode == Mode.Stopwatch && upArrows != null && downArrows != null)
+                {
+                    foreach (var arrow in upArrows)
+                    {
+                        if (arrow != null) arrow.Visible = false;
+                    }
+                    
+                    foreach (var arrow in downArrows)
+                    {
+                        if (arrow != null) arrow.Visible = false;
+                    }
+                }
                 break;
         }
         
@@ -823,13 +881,22 @@ public class MainForm : Form
     #region Button Event Handlers
     private void BtnTimer_Click(object sender, EventArgs e)
     {
-        btnTimer?.ContextMenuStrip?.Show(btnTimer, new Point(0, btnTimer.Height));
+        // Переключаемся в режим таймера
+        SwitchToTimerMode();
+        
+        // Включаем режим настройки таймера
+        SetTimerSetupMode(true);
     }
     
     private void BtnStart_Click(object sender, EventArgs e)
     {
         if (currentMode == Mode.Timer)
         {
+            if (isTimerSetupMode)
+            {
+                // Если в режиме настройки, выключаем его и запускаем таймер
+                SetTimerSetupMode(false);
+            }
             timerCountdown?.Start();
         }
         else if (currentMode == Mode.Stopwatch)
@@ -859,6 +926,11 @@ public class MainForm : Form
         if (currentMode == Mode.Timer)
         {
             timerCountdown?.Stop();
+            if (!isTimerSetupMode)
+            {
+                // Если сбрасываем во время работы таймера, включаем режим настройки
+                SetTimerSetupMode(true);
+            }
             countdownTime = TimeSpan.Zero;
         }
         else if (currentMode == Mode.Stopwatch)
@@ -960,6 +1032,223 @@ public class MainForm : Form
             secondDigits[1].Value = timeText[7] - '0';
     }
     #endregion
+
+    // Новый метод для настройки режима установки таймера
+    private void SetTimerSetupMode(bool enabled)
+    {
+        isTimerSetupMode = enabled;
+        
+        // Показываем/скрываем стрелки настройки, только если в режиме таймера
+        if (currentMode == Mode.Timer && upArrows != null && downArrows != null) 
+        {
+            foreach (var arrow in upArrows)
+            {
+                if (arrow != null) arrow.Visible = enabled;
+            }
+            
+            foreach (var arrow in downArrows)
+            {
+                if (arrow != null) arrow.Visible = enabled;
+            }
+            
+            // Изменяем доступность кнопок управления
+            btnStart.Enabled = enabled;
+            btnPause.Enabled = !enabled;
+            btnReset.Enabled = true;
+            
+            // Если включаем режим настройки и время не установлено, устанавливаем его в 0
+            if (enabled && countdownTime == TimeSpan.Zero)
+            {
+                countdownTime = TimeSpan.Zero;
+            }
+            
+            // Обновляем отображение
+            UpdateDisplay();
+        }
+        else 
+        {
+            // Если не в режиме таймера, скрываем стрелки в любом случае
+            if (upArrows != null && downArrows != null)
+            {
+                foreach (var arrow in upArrows)
+                {
+                    if (arrow != null) arrow.Visible = false;
+                }
+                
+                foreach (var arrow in downArrows)
+                {
+                    if (arrow != null) arrow.Visible = false;
+                }
+            }
+        }
+    }
+
+    private void InitializeControlPanel()
+    {
+        // Control panel at the bottom
+        pnlControls = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 50,
+            BackColor = Color.FromArgb(15, 15, 15)
+        };
+        
+        pnlControls.Paint += (s, e) => {
+            using (var brush = new LinearGradientBrush(
+                pnlControls.ClientRectangle,
+                Color.FromArgb(20, 20, 20), 
+                Color.FromArgb(5, 5, 5),
+                LinearGradientMode.Vertical))
+            {
+                e.Graphics.FillRectangle(brush, pnlControls.ClientRectangle);
+            }
+            
+            using (var pen = new Pen(Color.FromArgb(30, 30, 30), 1))
+            {
+                e.Graphics.DrawLine(pen, 0, 0, pnlControls.Width, 0);
+            }
+        };
+        
+        AddHandlers(pnlControls);
+        
+        // Create all buttons with centered icons
+        btnClock = CreateButton("🕒");
+        btnTimer = CreateButton("⏱️");
+        btnStopwatch = CreateButton("⏲️");
+        btnStart = CreateButton("▶️");
+        btnPause = CreateButton("⏸️");
+        btnReset = CreateButton("🔄");
+        btnTopMost = CreateButton("📌");
+        btnClose = CreateButton("✖");
+        
+        // Add all buttons to panel
+        pnlControls.Controls.Add(btnClock);
+        pnlControls.Controls.Add(btnTimer);
+        pnlControls.Controls.Add(btnStopwatch);
+        pnlControls.Controls.Add(btnStart);
+        pnlControls.Controls.Add(btnPause);
+        pnlControls.Controls.Add(btnReset);
+        pnlControls.Controls.Add(btnTopMost);
+        pnlControls.Controls.Add(btnClose);
+        
+        // Position buttons
+        LayoutControlPanel(1.0f);
+        
+        // Initial button state
+        UpdateButtonStates();
+        
+        // Attach event handlers
+        btnClock.Click += (s, e) => SwitchToClockMode();
+        btnTimer.Click += BtnTimer_Click;
+        btnStopwatch.Click += (s, e) => SwitchToStopwatchMode();
+        btnStart.Click += BtnStart_Click;
+        btnPause.Click += BtnPause_Click;
+        btnReset.Click += BtnReset_Click;
+        btnTopMost.Click += BtnTopMost_Click;
+        btnClose.Click += (s, e) => this.Close();
+        
+        // Больше не используем контекстное меню для таймера
+        // InitializeTimerContextMenu();
+    }
+
+    private void InitializeTimers()
+    {
+        // Clock timer
+        timerClock = new Timer
+        {
+            Interval = 1000
+        };
+        timerClock.Tick += TimerClock_Tick;
+        timerClock.Start();
+        
+        // Countdown timer
+        timerCountdown = new Timer
+        {
+            Interval = 1000
+        };
+        timerCountdown.Tick += TimerCountdown_Tick;
+        
+        // Stopwatch timer
+        timerStopwatch = new Timer
+        {
+            Interval = 1000
+        };
+        timerStopwatch.Tick += TimerStopwatch_Tick;
+    }
+
+    #region UI Helpers
+    private void ScaleButton(Button? button, float scale)
+    {
+        if (button == null) return;
+        
+        // Приведем в соответствие с размерами из LayoutControlPanel
+        button.Width = (int)(42 * scale);   // Было 45
+        button.Height = (int)(35 * scale);
+        
+        // Размер шрифта кнопок
+        float fontSize = BASE_BUTTON_FONT_SIZE * scale * 1.1f;
+        button.Font = new Font(button.Font.FontFamily, fontSize, FontStyle.Regular);
+    }
+
+    public Button CreateButton(string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Width = (int)(42),
+            Height = (int)(35),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(20, 20, 20),
+            ForeColor = Color.FromArgb(200, 200, 200),
+            Margin = new Padding(0),
+            Font = BUTTON_FONT,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Padding = new Padding(2, 0, 0, 1),
+            FlatAppearance =
+            {
+                BorderSize = 0,
+                MouseOverBackColor = Color.FromArgb(40, 40, 40),
+                MouseDownBackColor = Color.FromArgb(60, 60, 60)
+            }
+        };
+        
+        button.Paint += (s, e) => {
+            e.Graphics.Clear(button.BackColor);
+            
+            using (StringFormat sf = new StringFormat())
+            {
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                
+                RectangleF textRect = new RectangleF(1, -1, button.Width - 1, button.Height - 1);
+                e.Graphics.DrawString(button.Text, button.Font, new SolidBrush(button.ForeColor), textRect, sf);
+            }
+        };
+        
+        button.MouseEnter += (s, e) => {
+            button.ForeColor = Color.FromArgb(255, 255, 255);
+            button.Invalidate();
+        };
+        
+        button.MouseLeave += (s, e) => {
+            if (button == btnClock && currentMode == Mode.Clock ||
+                button == btnTimer && currentMode == Mode.Timer ||
+                button == btnStopwatch && currentMode == Mode.Stopwatch ||
+                button == btnTopMost && this.TopMost)
+            {
+                button.ForeColor = Color.White;
+            }
+            else
+            {
+                button.ForeColor = Color.FromArgb(200, 200, 200);
+            }
+            button.Invalidate();
+        };
+        
+        AddHandlers(button);
+        return button;
+    }
+    #endregion
 }
 
 // FlipDigit class to create the flip-clock effect
@@ -969,12 +1258,11 @@ public class FlipDigit : Panel
     private int _previousValue = 0;
     private bool _isFlipping = false;
     private DateTime _flipStartTime;
-    private const double FLIP_DURATION_MS = 300;
+    private const double FLIP_DURATION_MS = 150; // Было 300
     
     // Темно-черный фон
     private Color _backColor = Color.FromArgb(15, 15, 15);
     private Color _foreColor = Color.White;
-    private Color _lineColor = Color.FromArgb(10, 10, 10);
     private static readonly Font DEFAULT_FONT = new Font("Segoe UI", 36, FontStyle.Bold);
     
     private Timer flipTimer;
@@ -1003,10 +1291,10 @@ public class FlipDigit : Panel
     {
         this.DoubleBuffered = true;
         
-        // Таймер для анимации
+        // Таймер для анимации - увеличиваем частоту обновления для более плавной анимации
         flipTimer = new Timer
         {
-            Interval = 16 // ~60 FPS
+            Interval = 10 // ~100 FPS (было 16 - ~60 FPS)
         };
         flipTimer.Tick += (s, e) => {
             TimeSpan elapsed = DateTime.Now - _flipStartTime;
@@ -1307,7 +1595,7 @@ public class FlipDigit : Panel
             }
             
             // Отрисовка цифры
-            using (var brush = new SolidBrush(Color.White))
+            using (var brush = new SolidBrush(_foreColor))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
                 tempG.DrawString(_value.ToString(), font, brush, 
@@ -1413,7 +1701,7 @@ public class FlipDigit : Panel
         }
         
         // Отрисовка цифры
-        using (var brush = new SolidBrush(Color.White))
+        using (var brush = new SolidBrush(_foreColor))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, fullRect, format);
@@ -1513,7 +1801,7 @@ public class FlipDigit : Panel
             }
             
             // Отрисовка цифры - сдвигаем вниз
-            using (var brush = new SolidBrush(Color.White))
+            using (var brush = new SolidBrush(_foreColor))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
                 tempG.DrawString(_previousValue.ToString(), font, brush, 
