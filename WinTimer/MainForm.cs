@@ -240,7 +240,7 @@ public class MainForm : Form
         this.FormBorderStyle = FormBorderStyle.None;
         this.MaximizeBox = false;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.FromArgb(0, 0, 0); // Полностью черный фон как в FlipIt
+        this.BackColor = Color.FromArgb(0, 0, 0); // Полностью черный фон
         this.ForeColor = Color.White;
         this.MinimumSize = new Size(300, 160); // Уменьшаем минимальный размер
         this.Padding = new Padding(RESIZE_BORDER);
@@ -264,7 +264,7 @@ public class MainForm : Form
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(10),
-            BackColor = Color.Black // Полностью черный фон как в FlipIt
+            BackColor = Color.Black // Полностью черный фон
         };
         AddHandlers(pnlTimeDisplay);
         
@@ -472,6 +472,7 @@ public class MainForm : Form
             Margin = new Padding(0),
             Font = BUTTON_FONT,
             TextAlign = ContentAlignment.MiddleCenter,
+            Padding = new Padding(2, 0, 0, 1),
             FlatAppearance =
             {
                 BorderSize = 0,
@@ -480,12 +481,25 @@ public class MainForm : Form
             }
         };
         
+        button.Paint += (s, e) => {
+            e.Graphics.Clear(button.BackColor);
+            
+            using (StringFormat sf = new StringFormat())
+            {
+                sf.Alignment = StringAlignment.Center;
+                sf.LineAlignment = StringAlignment.Center;
+                
+                RectangleF textRect = new RectangleF(1, -1, button.Width - 1, button.Height - 1);
+                e.Graphics.DrawString(button.Text, button.Font, new SolidBrush(button.ForeColor), textRect, sf);
+            }
+        };
+        
         button.MouseEnter += (s, e) => {
             button.ForeColor = Color.FromArgb(255, 255, 255);
+            button.Invalidate();
         };
         
         button.MouseLeave += (s, e) => {
-            // Возвращаем исходный цвет или цвет активной кнопки
             if (button == btnClock && currentMode == Mode.Clock ||
                 button == btnTimer && currentMode == Mode.Timer ||
                 button == btnStopwatch && currentMode == Mode.Stopwatch ||
@@ -497,6 +511,7 @@ public class MainForm : Form
             {
                 button.ForeColor = Color.FromArgb(200, 200, 200);
             }
+            button.Invalidate();
         };
         
         AddHandlers(button);
@@ -947,7 +962,7 @@ public class MainForm : Form
     #endregion
 }
 
-// FlipDigit class to create the flip-clock effect similar to FlipIt
+// FlipDigit class to create the flip-clock effect
 public class FlipDigit : Panel
 {
     private int _value = 0;
@@ -956,7 +971,7 @@ public class FlipDigit : Panel
     private DateTime _flipStartTime;
     private const double FLIP_DURATION_MS = 300;
     
-    // Цвета точно как в FlipIt (темно-черный фон)
+    // Темно-черный фон
     private Color _backColor = Color.FromArgb(15, 15, 15);
     private Color _foreColor = Color.White;
     private Color _lineColor = Color.FromArgb(10, 10, 10);
@@ -1027,7 +1042,7 @@ public class FlipDigit : Panel
     {
         Rectangle rect = new Rectangle(0, 0, this.Width, this.Height);
         
-        // Скругленные углы для цифр (как в FlipIt)
+        // Скругленные углы для цифр
         GraphicsPath path = CreateRoundedRectangle(rect, 6);
         
         // Основная подложка (темный фон)
@@ -1091,7 +1106,7 @@ public class FlipDigit : Panel
             g.DrawLine(pen, 0, this.Height / 2 + 1, this.Width, this.Height / 2 + 1);
         }
         
-        // Отрисовка цифры
+        // Отрисовка цифры отдельно для верхней и нижней половин
         float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f);
         StringFormat format = new StringFormat
         {
@@ -1102,19 +1117,46 @@ public class FlipDigit : Panel
         // Настройка более качественного рендеринга текста
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
         
-        // Тень цифры (более выраженная) - сдвигаем вниз на 2-3 пикселя
+        // Сохраняем состояние графики
+        GraphicsState state = g.Save();
+        
+        // Отрисовка верхней половины цифры
+        g.SetClip(upperHalf);
+        
+        // Тень верхней половины цифры
         using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(3, 6, this.Width, this.Height), format);
         }
         
-        // Сама цифра - более яркая - сдвигаем вниз на 2-3 пикселя
+        // Сама верхняя половина цифры
         using (var brush = new SolidBrush(Color.FromArgb(255, 255, 255)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(0, 3, this.Width, this.Height), format);
         }
+        
+        // Восстанавливаем состояние и отрисовываем нижнюю половину
+        g.Restore(state);
+        g.SetClip(lowerHalf);
+        
+        // Тень нижней половины цифры
+        using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
+        using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
+        {
+            g.DrawString(digit.ToString(), font, brush, new RectangleF(3, 6, this.Width, this.Height), format);
+        }
+        
+        // Сама нижняя половина цифры
+        using (var brush = new SolidBrush(Color.FromArgb(255, 255, 255)))
+        using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
+        {
+            g.DrawString(digit.ToString(), font, brush, new RectangleF(0, 3, this.Width, this.Height), format);
+        }
+        
+        // Сбрасываем клип
+        g.ResetClip();
         
         // Создаем верхний путь для корректного клиппинга блика
         GraphicsPath upperClipPath = new GraphicsPath();
@@ -1124,7 +1166,7 @@ public class FlipDigit : Panel
         upperClipPath.AddLine(0, rect.Height / 2, 0, 6);
         
         // Сохраняем состояние перед клиппингом
-        GraphicsState state = g.Save();
+        state = g.Save();
         g.SetClip(upperClipPath);
         
         // Бликующая горизонтальная полоса сверху (тонкая и аккуратная)
@@ -1140,6 +1182,18 @@ public class FlipDigit : Panel
         
         // Восстанавливаем состояние графики
         g.Restore(state);
+        
+        // Перерисовываем разделительную линию, чтобы быть уверенными, что она поверх цифр
+        using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
+        {
+            g.DrawLine(pen, 0, this.Height / 2, this.Width, this.Height / 2);
+        }
+        
+        // Тень для линии
+        using (var pen = new Pen(Color.FromArgb(40, 40, 40), 1))
+        {
+            g.DrawLine(pen, 0, this.Height / 2 + 1, this.Width, this.Height / 2 + 1);
+        }
     }
     
     private void PaintFlippingDigit(Graphics g)
@@ -1304,15 +1358,15 @@ public class FlipDigit : Panel
             path.AddArc(rect.X + rect.Width - 12, rect.Y, 12, 12, 270, 90); // Верхний правый угол
             path.AddLine(rect.X + rect.Width, rect.Y + rect.Height, rect.X, rect.Y + rect.Height);
             path.AddLine(rect.X, rect.Y + rect.Height, rect.X, rect.Y + 6);
-                }
-                else
-                {
+        }
+        else
+        {
             // Нижняя половина цифры со скругленными нижними углами
             path.AddLine(rect.X, rect.Y, rect.X + rect.Width, rect.Y);
             path.AddLine(rect.X + rect.Width, rect.Y, rect.X + rect.Width, rect.Y + rect.Height - 6);
             path.AddArc(rect.X + rect.Width - 12, rect.Y + rect.Height - 12, 12, 12, 0, 90); // Нижний правый угол
             path.AddArc(rect.X, rect.Y + rect.Height - 12, 12, 12, 90, 90); // Нижний левый угол
-            path.AddLine(0, rect.Height - 6, 0, rect.Height / 2);
+            path.AddLine(rect.X, rect.Y + rect.Height - 6, rect.X, rect.Y);
         }
         
         // Фон для половины с градиентом
@@ -1331,7 +1385,7 @@ public class FlipDigit : Panel
             g.DrawPath(pen, path);
         }
         
-        // Отрисовка цифры
+        // Отрисовка цифры с клиппингом для ограничения внутри половины
         float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f);
         
         // Сохраняем состояние графики и устанавливаем клип
@@ -1389,6 +1443,12 @@ public class FlipDigit : Panel
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
             {
                 g.DrawLine(pen, rect.X, rect.Y + rect.Height, rect.X + rect.Width, rect.Y + rect.Height);
+            }
+            
+            // Тень для линии
+            using (var pen = new Pen(Color.FromArgb(40, 40, 40), 1))
+            {
+                g.DrawLine(pen, rect.X, rect.Y + rect.Height + 1, rect.X + rect.Width, rect.Y + rect.Height + 1);
             }
         }
     }
