@@ -62,6 +62,9 @@ public class MainForm : Form
     private TimeSpan countdownTime = TimeSpan.Zero;
     private TimeSpan stopwatchTime = TimeSpan.Zero;
     
+    // Храним ссылку на окно нотификации для возможности его закрытия
+    private Form? notificationForm = null;
+    
     // Variables for window dragging
     private bool isDragging = false;
     private Point dragStartPoint;
@@ -223,14 +226,182 @@ public class MainForm : Form
 
     private void FlashWindow()
     {
-        for (int i = 0; i < 10; i++)
+        // Запускаем мигание в отдельном потоке
+        Thread flashThread = new Thread(() => {
+            for (int i = 0; i < 5; i++)
+            {
+                BeginInvoke(() =>
+                {
+                    BackColor = Color.Red;
+                    Application.DoEvents();
+                });
+                Thread.Sleep(300);
+                
+                BeginInvoke(() => {
+                    BackColor = Color.FromArgb(0, 0, 0);
+                    Application.DoEvents();
+                });
+                Thread.Sleep(200);
+            }
+        });
+        
+        flashThread.Start();
+    }
+
+    // Новый метод для показа кастомного уведомления
+    private void ShowTimerCompleteNotification()
+    {
+        // Закрываем предыдущее окно нотификации, если оно существует
+        if (notificationForm != null && !notificationForm.IsDisposed)
         {
-            this.BackColor = Color.Red;
-            Application.DoEvents();
-            System.Threading.Thread.Sleep(200);
-            this.BackColor = Color.FromArgb(0, 0, 0);
-            Application.DoEvents();
-            System.Threading.Thread.Sleep(200);
+            notificationForm.Close();
+        }
+
+        // Создаем кастомное окно уведомления
+        notificationForm = new Form
+        {
+            Text = "",
+            Size = new Size(300, 150),
+            FormBorderStyle = FormBorderStyle.None,
+            StartPosition = FormStartPosition.CenterScreen,
+            BackColor = Color.FromArgb(25, 25, 25),
+            ForeColor = Color.White,
+            ShowInTaskbar = false,
+            TopMost = true,
+            Opacity = 0.95
+        };
+        
+        // Создаем элементы окна
+        Label titleLabel = new Label
+        {
+            Text = "Таймер завершен",
+            Font = new Font("Segoe UI", 14, FontStyle.Bold),
+            ForeColor = Color.White,
+            TextAlign = ContentAlignment.MiddleCenter,
+            Dock = DockStyle.Top,
+            Height = 50,
+            Padding = new Padding(0, 15, 0, 0)
+        };
+        
+        Button okButton = new Button
+        {
+            Text = "OK",
+            Font = new Font("Segoe UI", 10, FontStyle.Regular),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(40, 40, 45),
+            ForeColor = Color.White,
+            Size = new Size(80, 35),
+            TabIndex = 0, // Фокус на этой кнопке
+        };
+        
+        okButton.FlatAppearance.BorderSize = 0;
+        okButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 65);
+        
+        // Располагаем кнопку по центру
+        okButton.Location = new Point((notificationForm.ClientSize.Width - okButton.Width) / 2, 
+                                     notificationForm.ClientSize.Height - okButton.Height - 20);
+        
+        // Добавляем обработчики событий
+        okButton.Click += (s, e) => {
+            notificationForm.Close();
+            notificationForm = null;
+        };
+        
+        notificationForm.KeyDown += (s, e) => {
+            if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space || e.KeyCode == Keys.Escape)
+            {
+                notificationForm.Close();
+                notificationForm = null;
+            }
+        };
+        
+        notificationForm.FormClosed += (s, e) => {
+            notificationForm = null;
+        };
+        
+        // Эффект тени для формы
+        notificationForm.Paint += (s, e) => {
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            
+            // Создаем скругленные углы для окна
+            using (GraphicsPath path = new GraphicsPath())
+            {
+                int radius = 10;
+                Rectangle rect = new Rectangle(0, 0, notificationForm.Width - 1, notificationForm.Height - 1);
+                
+                path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
+                path.AddArc(rect.X + rect.Width - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
+                path.AddArc(rect.X + rect.Width - radius * 2, rect.Y + rect.Height - radius * 2, radius * 2, radius * 2, 0, 90);
+                path.AddArc(rect.X, rect.Y + rect.Height - radius * 2, radius * 2, radius * 2, 90, 90);
+                path.CloseFigure();
+                
+                notificationForm.Region = new Region(path);
+                
+                // Рисуем рамку
+                using (Pen pen = new Pen(Color.FromArgb(50, 50, 50), 1))
+                {
+                    e.Graphics.DrawPath(pen, path);
+                }
+            }
+        };
+        
+        // Добавляем элементы на форму
+        notificationForm.Controls.Add(okButton);
+        notificationForm.Controls.Add(titleLabel);
+        
+        // Показываем форму
+        notificationForm.Show(this);
+        
+        // Запускаем мигание окна нотификации в отдельном потоке
+        Thread flashNotificationThread = new Thread(() => {
+            Color originalBackColor = notificationForm.BackColor;
+            for (int i = 0; i < 5; i++)
+            {
+                // Иногда окно может быть уже закрыто
+                if (notificationForm.IsDisposed) break;
+                
+                BeginInvoke(() => {
+                    if (!notificationForm.IsDisposed)
+                    {
+                        notificationForm.BackColor = Color.Red;
+                        titleLabel.BackColor = Color.Red;
+                        Application.DoEvents();
+                    }
+                });
+                Thread.Sleep(300);
+                
+                BeginInvoke(() => {
+                    if (!notificationForm.IsDisposed)
+                    {
+                        notificationForm.BackColor = originalBackColor;
+                        titleLabel.BackColor = originalBackColor;
+                        Application.DoEvents();
+                    }
+                });
+                Thread.Sleep(200);
+            }
+        });
+        
+        flashNotificationThread.Start();
+        
+        // Проигрываем системный звук уведомления
+        try
+        {
+            System.Media.SystemSounds.Exclamation.Play();
+        }
+        catch
+        {
+            // Игнорируем ошибки при воспроизведении звука
+        }
+    }
+
+    // Метод для закрытия окна нотификации
+    private void CloseNotificationIfOpen()
+    {
+        if (notificationForm != null && !notificationForm.IsDisposed)
+        {
+            notificationForm.Close();
+            notificationForm = null;
         }
     }
     #endregion
@@ -728,9 +899,9 @@ public class MainForm : Form
             
             UpdateDisplay();
             
-            // Notify when timer completes
-            this.FlashWindow();
-            MessageBox.Show("Время истекло!", "WinTimer", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            // Notify when timer completes - запускаем мигание и показываем уведомление одновременно
+            FlashWindow();
+            ShowTimerCompleteNotification();
             
             // Возвращаемся в режим настройки таймера
             SetTimerSetupMode(true);
@@ -757,6 +928,9 @@ public class MainForm : Form
         // Скрываем стрелки настройки таймера при выходе из режима таймера
         SetTimerSetupMode(false);
         
+        // Закрываем окно нотификации, если оно открыто
+        CloseNotificationIfOpen();
+        
         UpdateButtonStates();
         UpdateDisplay();
     }
@@ -766,6 +940,9 @@ public class MainForm : Form
         currentMode = Mode.Timer;
         timerClock?.Stop();
         timerStopwatch?.Stop();
+        
+        // Закрываем окно нотификации, если оно открыто
+        CloseNotificationIfOpen();
         
         UpdateButtonStates();
         UpdateDisplay();
@@ -779,6 +956,9 @@ public class MainForm : Form
         
         // Скрываем стрелки настройки таймера при выходе из режима таймера
         SetTimerSetupMode(false);
+        
+        // Закрываем окно нотификации, если оно открыто
+        CloseNotificationIfOpen();
         
         UpdateButtonStates();
         UpdateDisplay();
@@ -898,6 +1078,9 @@ public class MainForm : Form
                 SetTimerSetupMode(false);
             }
             timerCountdown?.Start();
+            
+            // Закрываем окно нотификации, если оно открыто
+            CloseNotificationIfOpen();
         }
         else if (currentMode == Mode.Stopwatch)
         {
