@@ -50,7 +50,7 @@ public class MainForm : Form
     private Button btnTopMost;
     private Button btnClose;
 
-    // Стрелки для настройки таймера
+    // Arrows for timer setup
     private Button[] upArrows;
     private Button[] downArrows;
     private bool isTimerSetupMode = false;
@@ -60,9 +60,13 @@ public class MainForm : Form
     private bool isResizing = false;
     private Mode currentMode = Mode.Clock;
     private TimeSpan countdownTime = TimeSpan.Zero;
+    // Add a dedicated field to track hours for timer mode without day normalization
+    private int timerDisplayHours = 0;
+    private int timerDisplayMinutes = 0;
+    private int timerDisplaySeconds = 0;
     private TimeSpan stopwatchTime = TimeSpan.Zero;
     
-    // Храним ссылку на окно нотификации для возможности его закрытия
+    // Store a reference to the notification window for possible closing
     private Form? notificationForm = null;
     
     // Variables for window dragging
@@ -180,25 +184,25 @@ public class MainForm : Form
             // Scale all controls
             if (pnlTimeDisplay != null && pnlControls != null)
             {
-                // Обновляем размеры панелей
+                // Update panel sizes
                 pnlControls.Height = (int)(50 * scale);
                 
-                // Масштабируем элементы
+                // Scale elements
                 ScaleFlipClockDisplay(scale);
                 ScaleControlPanel(scale);
                 
-                // Проверяем, все ли кнопки видимы
+                // Check if all buttons are visible
                 EnsureButtonsVisible();
                 
-                // Обновляем размещение на форме
+                // Update form placement
                 this.Controls.Remove(pnlControls);
                 this.Controls.Remove(pnlTimeDisplay);
                 
                 this.Controls.Add(pnlControls);
                 this.Controls.Add(pnlTimeDisplay);
                 
-                // Обновляем отображение времени
-        UpdateDisplay();
+                // Update time display
+                UpdateDisplay();
             }
         }
         finally
@@ -209,10 +213,10 @@ public class MainForm : Form
 
     private void EnsureButtonsVisible()
     {
-        // Проверяем, все ли кнопки полностью видимы в панели управления
+        // Check if all buttons are fully visible in the control panel
         if (btnClose.Right > pnlControls.Width || btnTopMost.Right > pnlControls.Width)
         {
-            // Если кнопки выходят за границы, перепозиционируем их заново
+            // If buttons extend beyond the boundaries, reposition them
             LayoutControlPanel(this.Width / (float)BASE_WIDTH);
         }
     }
@@ -226,7 +230,7 @@ public class MainForm : Form
 
     private void FlashWindow()
     {
-        // Запускаем мигание в отдельном потоке
+        // Start flashing in a separate thread
         Thread flashThread = new Thread(() => {
             for (int i = 0; i < 5; i++)
             {
@@ -248,16 +252,16 @@ public class MainForm : Form
         flashThread.Start();
     }
 
-    // Новый метод для показа кастомного уведомления
+    // New method for showing a custom notification
     private void ShowTimerCompleteNotification()
     {
-        // Закрываем предыдущее окно нотификации, если оно существует
+        // Close any existing notification window
         if (notificationForm != null && !notificationForm.IsDisposed)
         {
             notificationForm.Close();
         }
 
-        // Создаем кастомное окно уведомления
+        // Create a custom notification window
         notificationForm = new Form
         {
             Text = "",
@@ -265,16 +269,16 @@ public class MainForm : Form
             FormBorderStyle = FormBorderStyle.None,
             StartPosition = FormStartPosition.CenterScreen,
             BackColor = Color.FromArgb(25, 25, 25),
-            ForeColor = Color.White,
+            ForeColor = Color.Black,
             ShowInTaskbar = false,
             TopMost = true,
             Opacity = 0.95
         };
         
-        // Создаем элементы окна
+        // Create elements of the window
         Label titleLabel = new Label
         {
-            Text = "Таймер завершен",
+            Text = "Timer is up!",
             Font = new Font("Segoe UI", 14, FontStyle.Bold),
             ForeColor = Color.White,
             TextAlign = ContentAlignment.MiddleCenter,
@@ -291,17 +295,17 @@ public class MainForm : Form
             BackColor = Color.FromArgb(40, 40, 45),
             ForeColor = Color.White,
             Size = new Size(80, 35),
-            TabIndex = 0, // Фокус на этой кнопке
+            TabIndex = 0, // Focus on this button
         };
         
         okButton.FlatAppearance.BorderSize = 0;
         okButton.FlatAppearance.MouseOverBackColor = Color.FromArgb(60, 60, 65);
         
-        // Располагаем кнопку по центру
+        // Position the button in the center
         okButton.Location = new Point((notificationForm.ClientSize.Width - okButton.Width) / 2, 
-                                     notificationForm.ClientSize.Height - okButton.Height - 20);
+                                     notificationForm.ClientSize.Height - okButton.Height);
         
-        // Добавляем обработчики событий
+        // Add event handlers
         okButton.Click += (s, e) => {
             notificationForm.Close();
             notificationForm = null;
@@ -319,45 +323,19 @@ public class MainForm : Form
             notificationForm = null;
         };
         
-        // Эффект тени для формы
-        notificationForm.Paint += (s, e) => {
-            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-            
-            // Создаем скругленные углы для окна
-            using (GraphicsPath path = new GraphicsPath())
-            {
-                int radius = 10;
-                Rectangle rect = new Rectangle(0, 0, notificationForm.Width - 1, notificationForm.Height - 1);
-                
-                path.AddArc(rect.X, rect.Y, radius * 2, radius * 2, 180, 90);
-                path.AddArc(rect.X + rect.Width - radius * 2, rect.Y, radius * 2, radius * 2, 270, 90);
-                path.AddArc(rect.X + rect.Width - radius * 2, rect.Y + rect.Height - radius * 2, radius * 2, radius * 2, 0, 90);
-                path.AddArc(rect.X, rect.Y + rect.Height - radius * 2, radius * 2, radius * 2, 90, 90);
-                path.CloseFigure();
-                
-                notificationForm.Region = new Region(path);
-                
-                // Рисуем рамку
-                using (Pen pen = new Pen(Color.FromArgb(50, 50, 50), 1))
-                {
-                    e.Graphics.DrawPath(pen, path);
-                }
-            }
-        };
-        
-        // Добавляем элементы на форму
+        // Add elements to the form
         notificationForm.Controls.Add(okButton);
         notificationForm.Controls.Add(titleLabel);
         
-        // Показываем форму
+        // Show the form
         notificationForm.Show(this);
         
-        // Запускаем мигание окна нотификации в отдельном потоке
+        // Start flashing the notification window in a separate thread
         Thread flashNotificationThread = new Thread(() => {
             Color originalBackColor = notificationForm.BackColor;
             for (int i = 0; i < 5; i++)
             {
-                // Иногда окно может быть уже закрыто
+                // Sometimes the window may already be closed
                 if (notificationForm.IsDisposed) break;
                 
                 BeginInvoke(() => {
@@ -384,18 +362,18 @@ public class MainForm : Form
         
         flashNotificationThread.Start();
         
-        // Проигрываем системный звук уведомления
+        // Play the system notification sound
         try
         {
             System.Media.SystemSounds.Exclamation.Play();
         }
         catch
         {
-            // Игнорируем ошибки при воспроизведении звука
+            // Ignore errors when playing the sound
         }
     }
 
-    // Метод для закрытия окна нотификации
+    // Method for closing the notification window
     private void CloseNotificationIfOpen()
     {
         if (notificationForm != null && !notificationForm.IsDisposed)
@@ -415,15 +393,15 @@ public class MainForm : Form
         this.FormBorderStyle = FormBorderStyle.None;
         this.MaximizeBox = false;
         this.StartPosition = FormStartPosition.CenterScreen;
-        this.BackColor = Color.FromArgb(0, 0, 0); // Полностью черный фон
+        this.BackColor = Color.FromArgb(0, 0, 0); // Fully black background
         this.ForeColor = Color.White;
-        this.MinimumSize = new Size(300, 160); // Уменьшаем минимальный размер
+        this.MinimumSize = new Size(300, 160); // Decrease minimum size
         this.Padding = new Padding(RESIZE_BORDER);
 
         // Add handlers for window dragging
         AddHandlers(this);
         
-        // Инициализируем сначала панель управления, а затем дисплей времени
+        // Initialize the control panel first, then the time display
         InitializeControlPanel();
         InitializeTimeDisplay();
         
@@ -439,7 +417,7 @@ public class MainForm : Form
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(10),
-            BackColor = Color.Black // Полностью черный фон
+            BackColor = Color.Black // Fully black background
         };
         AddHandlers(pnlTimeDisplay);
         
@@ -449,16 +427,19 @@ public class MainForm : Form
         secondDigits = new FlipDigit[2];
         separators = new Label[2];
         
-        // Создаем стрелки для настройки таймера
-        upArrows = new Button[6]; // По стрелке для каждой цифры
+        // Create arrows for timer setup
+        upArrows = new Button[6]; // One arrow for each digit
         downArrows = new Button[6];
         
         // Create individual digits
         for (int i = 0; i < 2; i++)
         {
             hourDigits[i] = new FlipDigit();
+            AddHandlers(hourDigits[i]);
             minuteDigits[i] = new FlipDigit();
+            AddHandlers(minuteDigits[i]);
             secondDigits[i] = new FlipDigit();
+            AddHandlers(secondDigits[i]);
             
             pnlTimeDisplay.Controls.Add(hourDigits[i]);
             pnlTimeDisplay.Controls.Add(minuteDigits[i]);
@@ -470,39 +451,39 @@ public class MainForm : Form
         {
             separators[i] = new Label
             {
-                Text = "",  // Пустой текст, так как будем рисовать точки вручную
-                ForeColor = Color.FromArgb(255, 255, 255), // Яркий белый цвет для разделителей
+                Text = "",  // Empty text, since we'll draw points manually
+                ForeColor = Color.FromArgb(255, 255, 255), // Bright white color for separators
                 TextAlign = ContentAlignment.MiddleCenter,
                 AutoSize = false,
                 BackColor = Color.Transparent
             };
             
-            // Добавляем кастомную отрисовку разделителей
+            // Add custom drawing of separators
             separators[i].Paint += (s, e) => {
                 Graphics g = e.Graphics;
                 g.SmoothingMode = SmoothingMode.AntiAlias;
                 
-                // Рисуем две точки вместо двоеточия
+                // Draw two points instead of a colon
                 int diameter = (int)(separators[0].Height * 0.12f);
                 int x = separators[0].Width / 2 - diameter / 2;
                 int y1 = separators[0].Height / 3 - diameter / 2;
                 int y2 = separators[0].Height * 2 / 3 - diameter / 2;
                 
-                // Тень для каждой точки
+                // Shadow for each point
                 using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
                 {
                     g.FillEllipse(brush, x + 1, y1 + 1, diameter, diameter);
                     g.FillEllipse(brush, x + 1, y2 + 1, diameter, diameter);
                 }
                 
-                // Основная точка - яркий белый цвет
+                // Main point - bright white color
                 using (var brush = new SolidBrush(Color.FromArgb(255, 255, 255)))
                 {
                     g.FillEllipse(brush, x, y1, diameter, diameter);
                     g.FillEllipse(brush, x, y2, diameter, diameter);
                 }
                 
-                // Подсветка точки (блик)
+                // Highlight point (glow)
                 using (var brush = new SolidBrush(Color.FromArgb(100, 255, 255, 255)))
                 {
                     g.FillEllipse(brush, x + diameter/4, y1 + diameter/4, diameter/2, diameter/2);
@@ -514,7 +495,7 @@ public class MainForm : Form
             AddHandlers(separators[i]);
         }
         
-        // Создаем стрелки для изменения значений таймера
+        // Create arrows for changing timer values
         CreateTimerArrows();
         
         // Position all display elements
@@ -523,7 +504,7 @@ public class MainForm : Form
 
     private void CreateTimerArrows()
     {
-        // Создаем стрелки для увеличения значений (вверх)
+        // Create arrows for increasing values (up)
         for (int i = 0; i < 6; i++)
         {
             upArrows[i] = new Button
@@ -535,14 +516,14 @@ public class MainForm : Form
                 Font = new Font("Segoe UI Symbol", 8, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleCenter,
                 Size = new Size(35, 20),
-                Visible = false, // Изначально скрыты
+                Visible = false, // Initially hidden
                 TabStop = false
             };
             
             upArrows[i].FlatAppearance.BorderSize = 0;
             upArrows[i].FlatAppearance.MouseOverBackColor = Color.FromArgb(50, 50, 60);
             
-            int index = i; // Для использования в лямбда-выражении
+            int index = i; // For use in lambda expression
             upArrows[i].Click += (s, e) => {
                 if (isTimerSetupMode)
                 {
@@ -553,7 +534,7 @@ public class MainForm : Form
             pnlTimeDisplay.Controls.Add(upArrows[i]);
         }
         
-        // Создаем стрелки для уменьшения значений (вниз)
+        // Create arrows for decreasing values (down)
         for (int i = 0; i < 6; i++)
         {
             downArrows[i] = new Button
@@ -565,14 +546,14 @@ public class MainForm : Form
                 Font = new Font("Segoe UI Symbol", 8, FontStyle.Bold),
                 TextAlign = ContentAlignment.MiddleCenter,
                 Size = new Size(35, 20),
-                Visible = false, // Изначально скрыты
+                Visible = false, // Initially hidden
                 TabStop = false
             };
             
             downArrows[i].FlatAppearance.BorderSize = 0;
             downArrows[i].FlatAppearance.MouseOverBackColor = Color.FromArgb(50, 50, 60);
             
-            int index = i; // Для использования в лямбда-выражении
+            int index = i; // For use in lambda expression
             downArrows[i].Click += (s, e) => {
                 if (isTimerSetupMode)
                 {
@@ -586,68 +567,99 @@ public class MainForm : Form
 
     private void IncreaseTimerDigit(int index)
     {
-        // Определяем, какую цифру изменяем
+        // Determine which digit to change
         switch (index)
         {
-            case 0: // Десятки часов
-                if (countdownTime.Hours < 90) // Ограничение на 99 часов
-                    countdownTime = countdownTime.Add(TimeSpan.FromHours(10));
+            case 0: // Tens of hours
+                // Add 10 hours directly
+                if (timerDisplayHours < 90) // Limit to 99 hours
+                    timerDisplayHours += 10;
+                else
+                    timerDisplayHours -= 90; // Reset to 0 from 90
                 break;
-            case 1: // Единицы часов
-                if (countdownTime.Hours % 10 < 9)
-                    countdownTime = countdownTime.Add(TimeSpan.FromHours(1));
+            case 1: // Units of hours
+                // Add 1 hour directly
+                if (timerDisplayHours % 10 < 9)
+                    timerDisplayHours += 1;
+                else
+                    timerDisplayHours -= 9; // Reset units digit to 0
                 break;
-            case 2: // Десятки минут
-                if (countdownTime.Minutes < 50)
-                    countdownTime = countdownTime.Add(TimeSpan.FromMinutes(10));
+            case 2: // Tens of minutes
+                if (timerDisplayMinutes < 50)
+                    timerDisplayMinutes += 10;
+                else
+                    timerDisplayMinutes -= 50; // Reset to 0 from 50
                 break;
-            case 3: // Единицы минут
-                if (countdownTime.Minutes % 10 < 9)
-                    countdownTime = countdownTime.Add(TimeSpan.FromMinutes(1));
+            case 3: // Units of minutes
+                if (timerDisplayMinutes % 10 < 9)
+                    timerDisplayMinutes += 1;
+                else
+                    timerDisplayMinutes -= 9; // Reset units digit to 0
                 break;
-            case 4: // Десятки секунд
-                if (countdownTime.Seconds < 50)
-                    countdownTime = countdownTime.Add(TimeSpan.FromSeconds(10));
+            case 4: // Tens of seconds
+                if (timerDisplaySeconds < 50)
+                    timerDisplaySeconds += 10;
+                else
+                    timerDisplaySeconds -= 50; // Reset to 0 from 50
                 break;
-            case 5: // Единицы секунд
-                if (countdownTime.Seconds % 10 < 9)
-                    countdownTime = countdownTime.Add(TimeSpan.FromSeconds(1));
+            case 5: // Units of seconds
+                if (timerDisplaySeconds % 10 < 9)
+                    timerDisplaySeconds += 1;
+                else
+                    timerDisplaySeconds -= 9; // Reset units digit to 0
                 break;
         }
         
+        // Update TimeSpan for compatibility with existing code
+        countdownTime = new TimeSpan(0, timerDisplayHours, timerDisplayMinutes, timerDisplaySeconds);
         UpdateDisplay();
     }
 
     private void DecreaseTimerDigit(int index)
     {
-        // Определяем, какую цифру изменяем
+        // Determine which digit to change
         switch (index)
         {
-            case 0: // Десятки часов
-                if (countdownTime.Hours >= 10)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromHours(10));
+            case 0: // Tens of hours
+                if (timerDisplayHours >= 10)
+                    timerDisplayHours -= 10;
+                else
+                    timerDisplayHours += 90; // Wrap around to 90
                 break;
-            case 1: // Единицы часов
-                if (countdownTime.Hours % 10 > 0 || countdownTime.Hours > 0)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromHours(1));
+            case 1: // Units of hours
+                if (timerDisplayHours % 10 > 0)
+                    timerDisplayHours -= 1;
+                else
+                    timerDisplayHours += 9; // Wrap around to x9
                 break;
-            case 2: // Десятки минут
-                if (countdownTime.Minutes >= 10)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromMinutes(10));
+            case 2: // Tens of minutes
+                if (timerDisplayMinutes >= 10)
+                    timerDisplayMinutes -= 10;
+                else
+                    timerDisplayMinutes += 50; // Wrap around to 50
                 break;
-            case 3: // Единицы минут
-                if (countdownTime.Minutes % 10 > 0 || countdownTime.Minutes > 0)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromMinutes(1));
+            case 3: // Units of minutes
+                if (timerDisplayMinutes % 10 > 0)
+                    timerDisplayMinutes -= 1;
+                else
+                    timerDisplayMinutes += 9; // Wrap around to x9
                 break;
-            case 4: // Десятки секунд
-                if (countdownTime.Seconds >= 10)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromSeconds(10));
+            case 4: // Tens of seconds
+                if (timerDisplaySeconds >= 10)
+                    timerDisplaySeconds -= 10;
+                else
+                    timerDisplaySeconds += 50; // Wrap around to 50
                 break;
-            case 5: // Единицы секунд
-                if (countdownTime.Seconds % 10 > 0 || countdownTime.Seconds > 0)
-                    countdownTime = countdownTime.Subtract(TimeSpan.FromSeconds(1));
+            case 5: // Units of seconds
+                if (timerDisplaySeconds % 10 > 0)
+                    timerDisplaySeconds -= 1;
+                else
+                    timerDisplaySeconds += 9; // Wrap around to x9
                 break;
         }
+        
+        // Update TimeSpan for compatibility with existing code
+        countdownTime = new TimeSpan(0, timerDisplayHours, timerDisplayMinutes, timerDisplaySeconds);
         
         UpdateDisplay();
     }
@@ -656,12 +668,12 @@ public class MainForm : Form
     {
         if (pnlTimeDisplay.Width <= 0 || pnlTimeDisplay.Height <= 0)
         {
-            // В случае, если панель еще не размещена, используем размеры формы для приблизительного расчета
+            // In case the panel is not yet placed, use the form size for approximate calculation
             pnlTimeDisplay.Width = ClientSize.Width;
             pnlTimeDisplay.Height = ClientSize.Height - (pnlControls?.Height ?? 50);
         }
         
-        // Оптимизируем размер цифр для новой ширины
+        // Optimize the size of digits for the new width
         int digitWidth = (int)(60 * scale);
         int digitHeight = (int)(90 * scale);
         int separatorWidth = (int)(18 * scale);
@@ -673,11 +685,11 @@ public class MainForm : Form
         
         int x = startX;
         
-        // Размер стрелок
+        // Size of arrows
         int arrowWidth = (int)(35 * scale);
         int arrowHeight = (int)(20 * scale);
         
-        // Текущий индекс для стрелок
+        // Current index for arrows
         int arrowIndex = 0;
         
         // Position hour digits
@@ -687,7 +699,7 @@ public class MainForm : Form
             hourDigits[i].Height = digitHeight;
             hourDigits[i].Location = new Point(x, y);
             
-            // Позиционируем стрелки над и под цифрами
+            // Position arrows above and below digits
             upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
             upArrows[arrowIndex].Width = arrowWidth;
             upArrows[arrowIndex].Height = arrowHeight;
@@ -713,7 +725,7 @@ public class MainForm : Form
             minuteDigits[i].Height = digitHeight;
             minuteDigits[i].Location = new Point(x, y);
             
-            // Позиционируем стрелки над и под цифрами
+            // Position arrows above and below digits
             upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
             upArrows[arrowIndex].Width = arrowWidth;
             upArrows[arrowIndex].Height = arrowHeight;
@@ -739,7 +751,7 @@ public class MainForm : Form
             secondDigits[i].Height = digitHeight;
             secondDigits[i].Location = new Point(x, y);
             
-            // Позиционируем стрелки над и под цифрами
+            // Position arrows above and below digits
             upArrows[arrowIndex].Location = new Point(x + (digitWidth - arrowWidth) / 2, y - arrowHeight - 5);
             upArrows[arrowIndex].Width = arrowWidth;
             upArrows[arrowIndex].Height = arrowHeight;
@@ -752,7 +764,7 @@ public class MainForm : Form
             arrowIndex++;
         }
         
-        // После изменения размеров принудительно перерисовываем разделители
+        // After changing sizes, forcefully redraw separators
         separators[0].Invalidate();
         separators[1].Invalidate();
     }
@@ -761,21 +773,21 @@ public class MainForm : Form
     {
         if (pnlControls.Width <= 0)
         {
-            // В случае, если панель еще не размещена, используем ширину формы для приблизительного расчета
+            // In case the panel is not yet placed, use the form width for approximate calculation
             pnlControls.Width = ClientSize.Width;
         }
         
-        // Оптимизируем размер кнопок и расстояние между ними
-        int buttonWidth = (int)(42 * scale);  // Уменьшаем с 45 для экономии места
+        // Optimize the size of buttons and the distance between them
+        int buttonWidth = (int)(42 * scale);  // Reduced from 45 for space saving
         int buttonHeight = (int)(35 * scale); 
-        int gap = (int)(8 * scale);          // Уменьшаем с 10 для экономии места
+        int gap = (int)(8 * scale);          // Reduced from 10 for space saving
         
         int totalWidth = 8 * buttonWidth + 7 * gap;
         
-        // Гарантируем, что у нас достаточно места по ширине
-        int availableWidth = pnlControls.Width - 20; // 10 пикселей отступ с каждой стороны
+        // Ensure we have enough width
+        int availableWidth = pnlControls.Width - 20; // 10 pixels offset on each side
         
-        // Если кнопки не помещаются, уменьшим их размер и отступы
+        // If buttons don't fit, reduce their size and gaps
         if (totalWidth > availableWidth)
         {
             float reductionFactor = availableWidth / (float)totalWidth;
@@ -832,7 +844,7 @@ public class MainForm : Form
     
     private void ScaleFlipClockDisplay(float scale)
     {
-        pnlTimeDisplay.Padding = new Padding((int)(5 * scale)); // Уменьшаем отступы с 10 до 5
+        pnlTimeDisplay.Padding = new Padding((int)(5 * scale));
         
         // Resize and reposition all digits and separators
         LayoutTimeDisplay(scale);
@@ -860,8 +872,8 @@ public class MainForm : Form
     
     private void ScaleControlPanel(float scale)
     {
-        // Увеличим высоту панели управления
-        pnlControls.Height = (int)(50 * scale);  // Увеличено с 40
+        // Increase the height of the control panel
+        pnlControls.Height = (int)(50 * scale);
         
         // Scale buttons
         ScaleButton(btnClock, scale);
@@ -889,23 +901,38 @@ public class MainForm : Form
     
     private void TimerCountdown_Tick(object sender, EventArgs e)
     {
-        countdownTime = countdownTime.Subtract(TimeSpan.FromSeconds(1));
+        // Decrease seconds
+        timerDisplaySeconds--;
         
-        if (countdownTime <= TimeSpan.Zero)
-        {
-            timerCountdown?.Stop();
-            countdownTime = TimeSpan.Zero;
-            UpdateButtonStates();
+        // Handle underflow
+        if (timerDisplaySeconds < 0) {
+            timerDisplaySeconds = 59;
+            timerDisplayMinutes--;
             
-            UpdateDisplay();
-            
-            // Notify when timer completes - запускаем мигание и показываем уведомление одновременно
-            FlashWindow();
-            ShowTimerCompleteNotification();
-            
-            // Возвращаемся в режим настройки таймера
-            SetTimerSetupMode(true);
+            if (timerDisplayMinutes < 0) {
+                timerDisplayMinutes = 59;
+                timerDisplayHours--;
+                
+                if (timerDisplayHours < 0) {
+                    // Timer completed
+                    timerDisplayHours = 0;
+                    timerDisplayMinutes = 0;
+                    timerDisplaySeconds = 0;
+                    timerCountdown?.Stop();
+                    UpdateButtonStates();
+                    
+                    // Notify when timer completes
+                    FlashWindow();
+                    ShowTimerCompleteNotification();
+                    
+                    // Return to timer setup mode
+                    SetTimerSetupMode(true);
+                }
+            }
         }
+        
+        // Update TimeSpan for compatibility
+        countdownTime = new TimeSpan(0, timerDisplayHours, timerDisplayMinutes, timerDisplaySeconds);
         
         UpdateDisplay();
     }
@@ -925,10 +952,10 @@ public class MainForm : Form
         timerStopwatch?.Stop();
         timerClock?.Start();
         
-        // Скрываем стрелки настройки таймера при выходе из режима таймера
+        // Hide timer setup arrows when exiting timer mode
         SetTimerSetupMode(false);
         
-        // Закрываем окно нотификации, если оно открыто
+        // Close notification if it's open
         CloseNotificationIfOpen();
         
         UpdateButtonStates();
@@ -941,7 +968,19 @@ public class MainForm : Form
         timerClock?.Stop();
         timerStopwatch?.Stop();
         
-        // Закрываем окно нотификации, если оно открыто
+        // Initialize timer display fields
+        if (countdownTime == TimeSpan.Zero) {
+            timerDisplayHours = 0;
+            timerDisplayMinutes = 0;
+            timerDisplaySeconds = 0;
+        } else {
+            // If there was a previous time set, restore it
+            timerDisplayHours = countdownTime.Hours + countdownTime.Days * 24;
+            timerDisplayMinutes = countdownTime.Minutes;
+            timerDisplaySeconds = countdownTime.Seconds;
+        }
+        
+        // Close notification if it's open
         CloseNotificationIfOpen();
         
         UpdateButtonStates();
@@ -954,10 +993,10 @@ public class MainForm : Form
         timerClock?.Stop();
         timerCountdown?.Stop();
         
-        // Скрываем стрелки настройки таймера при выходе из режима таймера
+        // Hide timer setup arrows when exiting timer mode
         SetTimerSetupMode(false);
         
-        // Закрываем окно нотификации, если оно открыто
+        // Close notification if it's open
         CloseNotificationIfOpen();
         
         UpdateButtonStates();
@@ -981,7 +1020,7 @@ public class MainForm : Form
                 btnPause.Visible = false;
                 btnReset.Visible = false;
                 
-                // Скрываем стрелки настройки таймера в режиме часов
+                // Hide timer setup arrows in clock mode
                 if (upArrows != null && downArrows != null)
                 {
                     foreach (var arrow in upArrows)
@@ -1009,7 +1048,7 @@ public class MainForm : Form
                 btnPause.Enabled = isRunning;
                 btnReset.Enabled = true;
                 
-                // В режиме секундомера стрелки тоже должны быть скрыты
+                // In stopwatch mode, arrows should also be hidden
                 if (currentMode == Mode.Stopwatch && upArrows != null && downArrows != null)
                 {
                     foreach (var arrow in upArrows)
@@ -1025,32 +1064,32 @@ public class MainForm : Form
                 break;
         }
         
-        // Устанавливаем фоновые цвета для активных кнопок с легкими цветными акцентами
+        // Set background colors for active buttons with light color accents
         btnClock.BackColor = currentMode == Mode.Clock ? 
-            Color.FromArgb(35, 35, 45) : Color.FromArgb(20, 20, 20); // Синеватый оттенок для часов
+            Color.FromArgb(35, 35, 45) : Color.FromArgb(20, 20, 20); // Light blue accent for clock
         
         btnTimer.BackColor = currentMode == Mode.Timer ? 
-            Color.FromArgb(40, 30, 30) : Color.FromArgb(20, 20, 20); // Красноватый оттенок для таймера
+            Color.FromArgb(40, 30, 30) : Color.FromArgb(20, 20, 20); // Reddish accent for timer
         
         btnStopwatch.BackColor = currentMode == Mode.Stopwatch ? 
-            Color.FromArgb(30, 40, 30) : Color.FromArgb(20, 20, 20); // Зеленоватый оттенок для секундомера
+            Color.FromArgb(30, 40, 30) : Color.FromArgb(20, 20, 20); // Greenish accent for stopwatch
         
-        // Кнопки управления тоже должны иметь акценты когда активны
+        // Control buttons should also have accents when active
         btnStart.BackColor = btnStart.Enabled && !btnPause.Enabled ? 
-            Color.FromArgb(30, 40, 30) : Color.FromArgb(20, 20, 20); // Зеленоватый оттенок
+            Color.FromArgb(30, 40, 30) : Color.FromArgb(20, 20, 20); // Greenish accent
         
         btnPause.BackColor = btnPause.Enabled ? 
-            Color.FromArgb(40, 35, 25) : Color.FromArgb(20, 20, 20); // Желтоватый оттенок
+            Color.FromArgb(40, 35, 25) : Color.FromArgb(20, 20, 20); // Yellowish accent
         
         btnReset.BackColor = Color.FromArgb(20, 20, 20);
         
-        // Кнопка TopMost тоже должна выделяться, если активна
+        // TopMost button should also have an accent if active
         btnTopMost.BackColor = this.TopMost ? 
-            Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Пурпурный оттенок
+            Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent
         
         btnClose.BackColor = Color.FromArgb(20, 20, 20);
         
-        // Подсвечиваем текст активных кнопок
+        // Highlight the text of active buttons
         btnClock.ForeColor = currentMode == Mode.Clock ? Color.White : Color.FromArgb(200, 200, 200);
         btnTimer.ForeColor = currentMode == Mode.Timer ? Color.White : Color.FromArgb(200, 200, 200);
         btnStopwatch.ForeColor = currentMode == Mode.Stopwatch ? Color.White : Color.FromArgb(200, 200, 200);
@@ -1061,10 +1100,10 @@ public class MainForm : Form
     #region Button Event Handlers
     private void BtnTimer_Click(object sender, EventArgs e)
     {
-        // Переключаемся в режим таймера
+        // Switch to timer mode
         SwitchToTimerMode();
         
-        // Включаем режим настройки таймера
+        // Enable timer setup mode
         SetTimerSetupMode(true);
     }
     
@@ -1074,12 +1113,12 @@ public class MainForm : Form
         {
             if (isTimerSetupMode)
             {
-                // Если в режиме настройки, выключаем его и запускаем таймер
+                // If in setup mode, disable it and start the timer
                 SetTimerSetupMode(false);
             }
             timerCountdown?.Start();
             
-            // Закрываем окно нотификации, если оно открыто
+            // Close notification if it's open
             CloseNotificationIfOpen();
         }
         else if (currentMode == Mode.Stopwatch)
@@ -1111,9 +1150,13 @@ public class MainForm : Form
             timerCountdown?.Stop();
             if (!isTimerSetupMode)
             {
-                // Если сбрасываем во время работы таймера, включаем режим настройки
+                // If resetting while the timer is running, enable setup mode
                 SetTimerSetupMode(true);
             }
+            // Reset all display fields
+            timerDisplayHours = 0;
+            timerDisplayMinutes = 0;
+            timerDisplaySeconds = 0;
             countdownTime = TimeSpan.Zero;
         }
         else if (currentMode == Mode.Stopwatch)
@@ -1131,36 +1174,6 @@ public class MainForm : Form
         this.TopMost = !this.TopMost;
         UpdateButtonStates();
     }
-    
-    private void TimerMenuItem_Click(object sender, EventArgs e)
-    {
-        if (sender is not ToolStripMenuItem item) return;
-        string text = item.Text;
-        
-        switch (text)
-        {
-            case "1 минута":
-                countdownTime = TimeSpan.FromMinutes(1);
-                break;
-            case "5 минут":
-                countdownTime = TimeSpan.FromMinutes(5);
-                break;
-            case "10 минут":
-                countdownTime = TimeSpan.FromMinutes(10);
-                break;
-            case "15 минут":
-                countdownTime = TimeSpan.FromMinutes(15);
-                break;
-            case "30 минут":
-                countdownTime = TimeSpan.FromMinutes(30);
-                break;
-            case "1 час":
-                countdownTime = TimeSpan.FromHours(1);
-                break;
-        }
-        
-        SwitchToTimerMode();
-    }
     #endregion
 
     #region Display Update
@@ -1176,17 +1189,22 @@ public class MainForm : Form
                 timeText = DateTime.Now.ToString("HH:mm:ss");
                 break;
             case Mode.Timer:
-                timeText = countdownTime.ToString(@"hh\:mm\:ss");
+                // Use our custom fields directly
+                timeText = $"{timerDisplayHours:D2}:{timerDisplayMinutes:D2}:{timerDisplaySeconds:D2}";
                 break;
             case Mode.Stopwatch:
-                timeText = stopwatchTime.ToString(@"hh\:mm\:ss");
+                // Custom format to ensure hours over 24 are shown properly
+                int hours = stopwatchTime.Hours;
+                int minutes = stopwatchTime.Minutes;
+                int seconds = stopwatchTime.Seconds;
+                timeText = $"{hours:D2}:{minutes:D2}:{seconds:D2}";
                 break;
             default:
                 timeText = "00:00:00";
                 break;
         }
         
-        // Проверяем, изменились ли цифры и запускаем анимацию только для изменившихся
+        // Check if digits have changed and start animation only for changed ones
         UpdateFlipDigits(timeText);
         previousTimeText = timeText;
     }
@@ -1196,19 +1214,19 @@ public class MainForm : Form
         // Format should be "HH:MM:SS"
         if (timeText.Length < 8) return;
         
-        // Обновление часов (только если изменились)
+        // Update hours (only if changed)
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[0] != timeText[0])
             hourDigits[0].Value = timeText[0] - '0';
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[1] != timeText[1])
             hourDigits[1].Value = timeText[1] - '0';
         
-        // Обновление минут (только если изменились)
+        // Update minutes (only if changed)
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[3] != timeText[3])
             minuteDigits[0].Value = timeText[3] - '0';
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[4] != timeText[4])
             minuteDigits[1].Value = timeText[4] - '0';
         
-        // Обновление секунд (только если изменились)
+        // Update seconds (only if changed)
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[6] != timeText[6])
             secondDigits[0].Value = timeText[6] - '0';
         if (string.IsNullOrEmpty(previousTimeText) || previousTimeText[7] != timeText[7])
@@ -1216,12 +1234,12 @@ public class MainForm : Form
     }
     #endregion
 
-    // Новый метод для настройки режима установки таймера
+    // New method for setting timer setup mode
     private void SetTimerSetupMode(bool enabled)
     {
         isTimerSetupMode = enabled;
         
-        // Показываем/скрываем стрелки настройки, только если в режиме таймера
+        // Show/hide setup arrows only if in timer mode
         if (currentMode == Mode.Timer && upArrows != null && downArrows != null) 
         {
             foreach (var arrow in upArrows)
@@ -1234,23 +1252,23 @@ public class MainForm : Form
                 if (arrow != null) arrow.Visible = enabled;
             }
             
-            // Изменяем доступность кнопок управления
+            // Change button accessibility
             btnStart.Enabled = enabled;
             btnPause.Enabled = !enabled;
             btnReset.Enabled = true;
             
-            // Если включаем режим настройки и время не установлено, устанавливаем его в 0
+            // If enabling setup mode and time is not set, set it to 0
             if (enabled && countdownTime == TimeSpan.Zero)
             {
                 countdownTime = TimeSpan.Zero;
             }
             
-            // Обновляем отображение
+            // Update display
             UpdateDisplay();
         }
         else 
         {
-            // Если не в режиме таймера, скрываем стрелки в любом случае
+            // If not in timer mode, hide arrows in any case
             if (upArrows != null && downArrows != null)
             {
                 foreach (var arrow in upArrows)
@@ -1330,7 +1348,7 @@ public class MainForm : Form
         btnTopMost.Click += BtnTopMost_Click;
         btnClose.Click += (s, e) => this.Close();
         
-        // Больше не используем контекстное меню для таймера
+        // We don't use context menu for timer anymore
         // InitializeTimerContextMenu();
     }
 
@@ -1364,11 +1382,11 @@ public class MainForm : Form
     {
         if (button == null) return;
         
-        // Приведем в соответствие с размерами из LayoutControlPanel
-        button.Width = (int)(42 * scale);   // Было 45
+        // Adjust to match sizes from LayoutControlPanel
+        button.Width = (int)(42 * scale);   // Was 45
         button.Height = (int)(35 * scale);
         
-        // Размер шрифта кнопок
+        // Button font size
         float fontSize = BASE_BUTTON_FONT_SIZE * scale * 1.1f;
         button.Font = new Font(button.Font.FontFamily, fontSize, FontStyle.Regular);
     }
@@ -1441,9 +1459,9 @@ public class FlipDigit : Panel
     private int _previousValue = 0;
     private bool _isFlipping = false;
     private DateTime _flipStartTime;
-    private const double FLIP_DURATION_MS = 150; // Было 300
+    private const double FLIP_DURATION_MS = 150;
     
-    // Темно-черный фон
+    // Dark-black background
     private Color _backColor = Color.FromArgb(15, 15, 15);
     private Color _foreColor = Color.White;
     private static readonly Font DEFAULT_FONT = new Font("Segoe UI", 36, FontStyle.Bold);
@@ -1460,7 +1478,7 @@ public class FlipDigit : Panel
                 _previousValue = _value;
                 _value = value % 10; // Ensure it's 0-9
                 
-                // Запускаем анимацию переворачивания
+                // Start flipping animation
                 _isFlipping = true;
                 _flipStartTime = DateTime.Now;
                 flipTimer.Start();
@@ -1474,10 +1492,10 @@ public class FlipDigit : Panel
     {
         this.DoubleBuffered = true;
         
-        // Таймер для анимации - увеличиваем частоту обновления для более плавной анимации
+        // Timer for animation - increase refresh rate for smoother animation
         flipTimer = new Timer
         {
-            Interval = 10 // ~100 FPS (было 16 - ~60 FPS)
+            Interval = 10
         };
         flipTimer.Tick += (s, e) => {
             TimeSpan elapsed = DateTime.Now - _flipStartTime;
@@ -1513,16 +1531,16 @@ public class FlipDigit : Panel
     {
         Rectangle rect = new Rectangle(0, 0, this.Width, this.Height);
         
-        // Скругленные углы для цифр
+        // Rounded corners for digits
         GraphicsPath path = CreateRoundedRectangle(rect, 6);
         
-        // Основная подложка (темный фон)
+        // Main background (dark background)
         using (var brush = new SolidBrush(_backColor))
         {
             g.FillPath(brush, path);
         }
         
-        // Градиент для верхней половины цифры - более темный
+        // Gradient for upper half of digit - darker
         Rectangle upperHalf = new Rectangle(0, 0, this.Width, this.Height / 2);
         using (var brush = new LinearGradientBrush(
             upperHalf,
@@ -1530,17 +1548,17 @@ public class FlipDigit : Panel
             Color.FromArgb(20, 20, 20),
             LinearGradientMode.Vertical))
         {
-            // Создаем путь для верхней половины со скругленными верхними углами
+            // Create path for upper half with rounded top corners
             GraphicsPath upperPath = new GraphicsPath();
-            upperPath.AddArc(0, 0, 12, 12, 180, 90); // Верхний левый угол
-            upperPath.AddArc(rect.Width - 12, 0, 12, 12, 270, 90); // Верхний правый угол
+            upperPath.AddArc(0, 0, 12, 12, 180, 90); // Top left corner
+            upperPath.AddArc(rect.Width - 12, 0, 12, 12, 270, 90); // Top right corner
             upperPath.AddLine(rect.Width, rect.Height / 2, 0, rect.Height / 2);
             upperPath.AddLine(0, rect.Height / 2, 0, 6);
             
             g.FillPath(brush, upperPath);
         }
         
-        // Градиент для нижней половины цифры
+        // Gradient for lower half of digit
         Rectangle lowerHalf = new Rectangle(0, this.Height / 2, this.Width, this.Height / 2);
         using (var brush = new LinearGradientBrush(
             lowerHalf,
@@ -1548,36 +1566,36 @@ public class FlipDigit : Panel
             Color.FromArgb(15, 15, 15),
             LinearGradientMode.Vertical))
         {
-            // Создаем путь для нижней половины со скругленными нижними углами
+            // Create path for lower half with rounded bottom corners
             GraphicsPath lowerPath = new GraphicsPath();
             lowerPath.AddLine(0, rect.Height / 2, rect.Width, rect.Height / 2);
             lowerPath.AddLine(rect.Width, rect.Height / 2, rect.Width, rect.Height - 6);
-            lowerPath.AddArc(rect.Width - 12, rect.Height - 12, 12, 12, 0, 90); // Нижний правый угол
-            lowerPath.AddArc(0, rect.Height - 12, 12, 12, 90, 90); // Нижний левый угол
+            lowerPath.AddArc(rect.Width - 12, rect.Height - 12, 12, 12, 0, 90); // Bottom right corner
+            lowerPath.AddArc(0, rect.Height - 12, 12, 12, 90, 90); // Bottom left corner
             lowerPath.AddLine(0, rect.Height - 6, 0, rect.Height / 2);
             
             g.FillPath(brush, lowerPath);
         }
         
-        // Рамка вокруг всей цифры
+        // Frame around the entire digit
         using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
         {
             g.DrawPath(pen, path);
         }
         
-        // Разделительная линия посередине с тенью
+        // Separator line in the middle with shadow
         using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
         {
             g.DrawLine(pen, 0, this.Height / 2, this.Width, this.Height / 2);
         }
         
-        // Тень для линии
+        // Shadow for the line
         using (var pen = new Pen(Color.FromArgb(40, 40, 40), 1))
         {
             g.DrawLine(pen, 0, this.Height / 2 + 1, this.Width, this.Height / 2 + 1);
         }
         
-        // Отрисовка цифры отдельно для верхней и нижней половин
+        // Drawing digit separately for upper and lower halves
         float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f);
         StringFormat format = new StringFormat
         {
@@ -1585,62 +1603,62 @@ public class FlipDigit : Panel
             LineAlignment = StringAlignment.Center
         };
         
-        // Настройка более качественного рендеринга текста
+        // Setting up better text rendering
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
         
-        // Сохраняем состояние графики
+        // Saving graphics state
         GraphicsState state = g.Save();
         
-        // Отрисовка верхней половины цифры
+        // Drawing upper half of digit
         g.SetClip(upperHalf);
         
-        // Тень верхней половины цифры
+        // Shadow for upper half of digit
         using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(3, 6, this.Width, this.Height), format);
         }
         
-        // Сама верхняя половина цифры
+        // Upper half of digit itself
         using (var brush = new SolidBrush(Color.FromArgb(255, 255, 255)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(0, 3, this.Width, this.Height), format);
         }
         
-        // Восстанавливаем состояние и отрисовываем нижнюю половину
+        // Restore graphics state and draw lower half
         g.Restore(state);
         g.SetClip(lowerHalf);
         
-        // Тень нижней половины цифры
+        // Shadow for lower half of digit
         using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(3, 6, this.Width, this.Height), format);
         }
         
-        // Сама нижняя половина цифры
+        // Lower half of digit itself
         using (var brush = new SolidBrush(Color.FromArgb(255, 255, 255)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(0, 3, this.Width, this.Height), format);
         }
         
-        // Сбрасываем клип
+        // Reset clip
         g.ResetClip();
         
-        // Создаем верхний путь для корректного клиппинга блика
+        // Create upper path for correct clipping of glow
         GraphicsPath upperClipPath = new GraphicsPath();
         upperClipPath.AddArc(0, 0, 12, 12, 180, 90);
         upperClipPath.AddArc(rect.Width - 12, 0, 12, 12, 270, 90);
         upperClipPath.AddLine(rect.Width, rect.Height / 2, 0, rect.Height / 2);
         upperClipPath.AddLine(0, rect.Height / 2, 0, 6);
         
-        // Сохраняем состояние перед клиппингом
+        // Save state before clipping
         state = g.Save();
         g.SetClip(upperClipPath);
         
-        // Бликующая горизонтальная полоса сверху (тонкая и аккуратная)
+        // Bright horizontal band at the top (thin and precise)
         Rectangle reflectionRect = new Rectangle(5, 5, this.Width - 10, this.Height / 30);
         using (var brush = new LinearGradientBrush(
             reflectionRect,
@@ -1651,16 +1669,16 @@ public class FlipDigit : Panel
             g.FillRectangle(brush, reflectionRect);
         }
         
-        // Восстанавливаем состояние графики
+        // Restore graphics state
         g.Restore(state);
         
-        // Перерисовываем разделительную линию, чтобы быть уверенными, что она поверх цифр
+        // Redraw separator line to ensure it's above digits
         using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
         {
             g.DrawLine(pen, 0, this.Height / 2, this.Width, this.Height / 2);
         }
         
-        // Тень для линии
+        // Shadow for the line
         using (var pen = new Pen(Color.FromArgb(40, 40, 40), 1))
         {
             g.DrawLine(pen, 0, this.Height / 2 + 1, this.Width, this.Height / 2 + 1);
@@ -1674,52 +1692,52 @@ public class FlipDigit : Panel
         
         int halfHeight = this.Height / 2;
         
-        // Определяем фазу анимации
+        // Determine animation phase
         bool isFirstPhase = progress < 0.5;
         double phaseProgress = isFirstPhase ? progress * 2 : (progress - 0.5) * 2;
         
-        // Угол поворота для текущей фазы (от 0 до 90 градусов)
+        // Angle for current phase (from 0 to 90 degrees)
         double angle = phaseProgress * 90.0;
         
-        // Определяем видимость панелей в зависимости от фазы
+        // Determine visibility of panels depending on phase
         if (isFirstPhase)
         {
-            // ФАЗА 1: Верхняя панель старой цифры складывается ВНИЗ
+            // PHASE 1: Upper panel of old digit folds down
             
-            // 1. Рисуем нижнюю половину СТАРОЙ цифры (неподвижна)
+            // 1. Draw lower half of OLD digit (stationary)
             Rectangle lowerRect = new Rectangle(0, halfHeight, this.Width, halfHeight);
             PaintStaticHalfDigit(g, lowerRect, _previousValue, false);
             
-            // 2. Рисуем верхнюю половину НОВОЙ цифры (видна под складывающейся панелью)
+            // 2. Draw upper half of NEW digit (visible under folding panel)
             Rectangle upperNewRect = new Rectangle(0, 0, this.Width, halfHeight);
             PaintStaticHalfDigit(g, upperNewRect, _value, true);
             
-            // 3. Рисуем складывающуюся ВНИЗ верхнюю половину СТАРОЙ цифры
+            // 3. Draw folding top half of OLD digit
             PaintFoldingTopDown(g, angle);
         }
         else
         {
-            // ФАЗА 2: Нижняя панель НОВОЙ цифры раскладывается ВНИЗ
+            // PHASE 2: Bottom panel of NEW digit folds down
 
-            // 1. Рисуем верхнюю половину НОВОЙ цифры (уже полностью видна)
+            // 1. Draw upper half of NEW digit (already fully visible)
             Rectangle upperRect = new Rectangle(0, 0, this.Width, halfHeight);
             PaintStaticHalfDigit(g, upperRect, _value, true);
             
-            // 2. Рисуем нижнюю половину СТАРОЙ цифры (будет закрыта раскладывающейся панелью)
+            // 2. Draw lower half of OLD digit (will be covered by folding panel)
             Rectangle lowerOldRect = new Rectangle(0, halfHeight, this.Width, halfHeight);
             PaintStaticHalfDigit(g, lowerOldRect, _previousValue, false);
             
-            // 3. Рисуем раскладывающуюся ВНИЗ нижнюю половину НОВОЙ цифры
+            // 3. Draw folding bottom half of NEW digit
             PaintFoldingBottomDown(g, angle);
         }
     }
     
-    // Рисует нижнюю панель раскладывающуюся вниз
+    // Draws bottom panel folding down
     private void PaintFoldingBottomDown(Graphics g, double angle)
     {
         int halfHeight = this.Height / 2;
         
-        // Создаем временную битмапу для нижней половины НОВОЙ цифры
+        // Create temporary bitmap for lower half of NEW digit
         using (Bitmap bmp = new Bitmap(this.Width, halfHeight))
         using (Graphics tempG = Graphics.FromImage(bmp))
         {
@@ -1728,18 +1746,18 @@ public class FlipDigit : Panel
             tempG.InterpolationMode = InterpolationMode.HighQualityBicubic;
             tempG.PixelOffsetMode = PixelOffsetMode.HighQuality;
             
-            // Рисуем нижнюю половину НОВОЙ цифры
+            // Draw lower half of NEW digit
             Rectangle tempRect = new Rectangle(0, 0, this.Width, halfHeight);
             
-            // Создаем путь для нижней половины
+            // Create path for lower half
             GraphicsPath path = new GraphicsPath();
             path.AddLine(0, 0, tempRect.Width, 0);
             path.AddLine(tempRect.Width, 0, tempRect.Width, tempRect.Height - 6);
-            path.AddArc(tempRect.Width - 12, tempRect.Height - 12, 12, 12, 0, 90); // Нижний правый угол
-            path.AddArc(0, tempRect.Height - 12, 12, 12, 90, 90); // Нижний левый угол
+            path.AddArc(tempRect.Width - 12, tempRect.Height - 12, 12, 12, 0, 90); // Bottom right corner
+            path.AddArc(0, tempRect.Height - 12, 12, 12, 90, 90); // Bottom left corner
             path.AddLine(0, tempRect.Height - 6, 0, 0);
             
-            // Заполняем фон
+            // Fill background
             using (var brush = new LinearGradientBrush(
                 tempRect,
                 Color.FromArgb(20, 20, 20),
@@ -1749,27 +1767,27 @@ public class FlipDigit : Panel
                 tempG.FillPath(brush, path);
             }
             
-            // Рисуем рамку
+            // Draw border
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
             {
                 tempG.DrawPath(pen, path);
             }
             
-            // Рисуем цифру
-            float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Увеличенный размер шрифта
+            // Draw digit
+            float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Increased font size
             StringFormat format = new StringFormat
             {
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
             };
             
-            // Устанавливаем клип и рисуем цифру
+            // Set clip and draw digit
             tempG.SetClip(path);
             
-            // Сдвиг для нижней половины цифры - добавляем смещение вниз для лучшего центрирования
-            float yOffset = -halfHeight + 3; // Добавляем смещение вниз
+            // Shift for lower half of digit - add offset to bottom for better centering
+            float yOffset = -halfHeight + 3; // Add offset to bottom
             
-            // Отрисовка тени цифры
+            // Draw digit shadow
             using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
@@ -1777,7 +1795,7 @@ public class FlipDigit : Panel
                     new RectangleF(3, yOffset + 3, this.Width, this.Height), format);
             }
             
-            // Отрисовка цифры
+            // Draw digit
             using (var brush = new SolidBrush(_foreColor))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
@@ -1785,28 +1803,28 @@ public class FlipDigit : Panel
                     new RectangleF(0, yOffset, this.Width, this.Height), format);
             }
             
-            // Инвертируем угол для раскладывания (0 -> полностью сложено, 90 -> полностью раскрыто)
+            // Invert angle for folding (0 -> fully folded, 90 -> fully unfolded)
             float scaleHeight = (float)Math.Sin(angle * Math.PI / 180.0);
             
-            // Определяем точки для отрисовки раскладывающейся панели
+            // Determine points for drawing folding panel
             Point[] destPoints = new Point[3];
             
-            // Создаем трансформацию, где панель прикреплена сверху и раскладывается вниз
-            destPoints[0] = new Point(0, halfHeight); // Левый верхний угол закреплен на середине
-            destPoints[1] = new Point(this.Width, halfHeight); // Правый верхний угол закреплен на середине
-            destPoints[2] = new Point(0, halfHeight + (int)(halfHeight * scaleHeight)); // Левый нижний угол движется вниз по мере раскладывания
+            // Create transformation where panel is attached at the top and folds down
+            destPoints[0] = new Point(0, halfHeight); // Left top corner fixed at center
+            destPoints[1] = new Point(this.Width, halfHeight); // Right top corner fixed at center
+            destPoints[2] = new Point(0, halfHeight + (int)(halfHeight * scaleHeight)); // Left bottom corner moves down as it folds
             
-            // Рисуем трансформированное изображение
+            // Draw transformed image
             g.DrawImage(bmp, destPoints);
             
-            // Добавляем затенение для 3D-эффекта (меньше затенения по мере раскладывания)
+            // Add shadow for 3D effect (less shadow as it folds)
             int shadowAlpha = (int)(150 * (1.0 - Math.Sin(angle * Math.PI / 180.0)));
             using (var brush = new SolidBrush(Color.FromArgb(shadowAlpha, 0, 0, 0)))
             {
                 g.FillPolygon(brush, destPoints);
             }
             
-            // Добавляем линию на нижнем крае раскладывающейся панели
+            // Add line at bottom edge of folding panel
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
             {
                 g.DrawLine(pen, 
@@ -1816,31 +1834,31 @@ public class FlipDigit : Panel
         }
     }
     
-    // Рисует статичную половину цифры (верхнюю или нижнюю)
+    // Draws static half of digit (upper or lower)
     private void PaintStaticHalfDigit(Graphics g, Rectangle rect, int digit, bool isTopHalf)
     {
-        // Создаем путь со скругленными углами для половинки
+        // Create path with rounded corners for half
         GraphicsPath path = new GraphicsPath();
         
         if (isTopHalf)
         {
-            // Верхняя половина цифры со скругленными верхними углами
-            path.AddArc(rect.X, rect.Y, 12, 12, 180, 90); // Верхний левый угол
-            path.AddArc(rect.X + rect.Width - 12, rect.Y, 12, 12, 270, 90); // Верхний правый угол
+            // Upper half of digit with rounded top corners
+            path.AddArc(rect.X, rect.Y, 12, 12, 180, 90); // Top left corner
+            path.AddArc(rect.X + rect.Width - 12, rect.Y, 12, 12, 270, 90); // Top right corner
             path.AddLine(rect.X + rect.Width, rect.Y + rect.Height, rect.X, rect.Y + rect.Height);
             path.AddLine(rect.X, rect.Y + rect.Height, rect.X, rect.Y + 6);
         }
         else
         {
-            // Нижняя половина цифры со скругленными нижними углами
+            // Lower half of digit with rounded bottom corners
             path.AddLine(rect.X, rect.Y, rect.X + rect.Width, rect.Y);
             path.AddLine(rect.X + rect.Width, rect.Y, rect.X + rect.Width, rect.Y + rect.Height - 6);
-            path.AddArc(rect.X + rect.Width - 12, rect.Y + rect.Height - 12, 12, 12, 0, 90); // Нижний правый угол
-            path.AddArc(rect.X, rect.Y + rect.Height - 12, 12, 12, 90, 90); // Нижний левый угол
+            path.AddArc(rect.X + rect.Width - 12, rect.Y + rect.Height - 12, 12, 12, 0, 90); // Bottom right corner
+            path.AddArc(rect.X, rect.Y + rect.Height - 12, 12, 12, 90, 90); // Bottom left corner
             path.AddLine(rect.X, rect.Y + rect.Height - 6, rect.X, rect.Y);
         }
         
-        // Фон для половины с градиентом
+        // Background for half with gradient
         using (var brush = new LinearGradientBrush(
             rect,
             isTopHalf ? Color.FromArgb(30, 30, 30) : Color.FromArgb(20, 20, 20),
@@ -1850,40 +1868,40 @@ public class FlipDigit : Panel
             g.FillPath(brush, path);
         }
         
-        // Рамка
+        // Frame
         using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
         {
             g.DrawPath(pen, path);
         }
         
-        // Отрисовка цифры с клиппингом для ограничения внутри половины
+        // Drawing digit with clipping to limit it inside half
         float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f);
         
-        // Сохраняем состояние графики и устанавливаем клип
+        // Save graphics state and set clip
         GraphicsState state = g.Save();
         g.SetClip(path);
         
-        // Полный прямоугольник для текста
-        RectangleF fullRect = new RectangleF(0, 3, this.Width, this.Height); // Сдвигаем вниз текст
+        // Full rectangle for text
+        RectangleF fullRect = new RectangleF(0, 3, this.Width, this.Height); // Shift text down
         
-        // Форматирование текста
+        // Formatting text
         StringFormat format = new StringFormat
         {
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center
         };
         
-        // Настройка более качественного рендеринга текста
+        // Setting up better text rendering
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAlias;
         
-        // Отрисовка тени цифры
+        // Drawing digit shadow
         using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
             g.DrawString(digit.ToString(), font, brush, new RectangleF(3, 6, this.Width, this.Height), format);
         }
         
-        // Отрисовка цифры
+        // Drawing digit
         using (var brush = new SolidBrush(_foreColor))
         using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
         {
@@ -1892,7 +1910,7 @@ public class FlipDigit : Panel
         
         g.Restore(state);
         
-        // Добавляем блик для верхней половины
+        // Adding glow for upper half
         if (isTopHalf)
         {
             Rectangle reflectionRect = new Rectangle(rect.X + 5, rect.Y + 5, rect.Width - 10, rect.Height / 15);
@@ -1908,7 +1926,7 @@ public class FlipDigit : Panel
             }
         }
         
-        // Разделительная линия для верхней половины
+        // Separator line for upper half
         if (isTopHalf)
         {
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
@@ -1916,7 +1934,7 @@ public class FlipDigit : Panel
                 g.DrawLine(pen, rect.X, rect.Y + rect.Height, rect.X + rect.Width, rect.Y + rect.Height);
             }
             
-            // Тень для линии
+            // Shadow for line
             using (var pen = new Pen(Color.FromArgb(40, 40, 40), 1))
             {
                 g.DrawLine(pen, rect.X, rect.Y + rect.Height + 1, rect.X + rect.Width, rect.Y + rect.Height + 1);
@@ -1924,12 +1942,12 @@ public class FlipDigit : Panel
         }
     }
     
-    // Рисует верхнюю панель складывающуюся вниз
+    // Draws upper panel folding down
     private void PaintFoldingTopDown(Graphics g, double angle)
     {
         int halfHeight = this.Height / 2;
         
-        // Создаем временную битмапу для верхней половины старой цифры
+        // Create temporary bitmap for upper half of old digit
         using (Bitmap bmp = new Bitmap(this.Width, halfHeight))
         using (Graphics tempG = Graphics.FromImage(bmp))
         {
@@ -1938,17 +1956,17 @@ public class FlipDigit : Panel
             tempG.InterpolationMode = InterpolationMode.HighQualityBicubic;
             tempG.PixelOffsetMode = PixelOffsetMode.HighQuality;
             
-            // Рисуем верхнюю половину СТАРОЙ цифры
+            // Draw upper half of OLD digit
             Rectangle tempRect = new Rectangle(0, 0, this.Width, halfHeight);
             
-            // Создаем путь для верхней половины
+            // Create path for upper half
             GraphicsPath path = new GraphicsPath();
-            path.AddArc(0, 0, 12, 12, 180, 90); // Верхний левый угол
-            path.AddArc(tempRect.Width - 12, 0, 12, 12, 270, 90); // Верхний правый угол
+            path.AddArc(0, 0, 12, 12, 180, 90); // Top left corner
+            path.AddArc(tempRect.Width - 12, 0, 12, 12, 270, 90); // Top right corner
             path.AddLine(tempRect.Width, tempRect.Height, 0, tempRect.Height);
             path.AddLine(0, tempRect.Height, 0, 6);
             
-            // Заполняем фон
+            // Fill background
             using (var brush = new LinearGradientBrush(
                 tempRect,
                 Color.FromArgb(30, 30, 30),
@@ -1958,24 +1976,24 @@ public class FlipDigit : Panel
                 tempG.FillPath(brush, path);
             }
             
-            // Рисуем рамку
+            // Draw frame
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
             {
                 tempG.DrawPath(pen, path);
             }
             
-            // Рисуем цифру
-            float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Увеличенный размер шрифта
+            // Draw digit
+            float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Increased font size
             StringFormat format = new StringFormat
             {
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
             };
             
-            // Устанавливаем клип и рисуем цифру
+            // Set clip and draw digit
             tempG.SetClip(path);
             
-            // Отрисовка тени цифры - сдвигаем вниз
+            // Drawing digit shadow - shift down
             using (var brush = new SolidBrush(Color.FromArgb(30, 0, 0, 0)))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
@@ -1983,7 +2001,7 @@ public class FlipDigit : Panel
                     new RectangleF(3, 6, this.Width, this.Height), format);
             }
             
-            // Отрисовка цифры - сдвигаем вниз
+            // Drawing digit - shift down
             using (var brush = new SolidBrush(_foreColor))
             using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
             {
@@ -1991,7 +2009,7 @@ public class FlipDigit : Panel
                     new RectangleF(0, 3, this.Width, this.Height), format);
             }
             
-            // Добавляем блик - идентичный блику в статичной верхней половине
+            // Adding glow - identical to glow in static upper half
             Rectangle reflectionRect = new Rectangle(5, 5, tempRect.Width - 10, tempRect.Height / 15);
             using (var brush = new LinearGradientBrush(
                 reflectionRect,
@@ -2002,28 +2020,28 @@ public class FlipDigit : Panel
                 tempG.FillRectangle(brush, reflectionRect);
             }
             
-            // Вычисляем "сжатие" по вертикали из-за поворота
+            // Calculate vertical compression due to rotation
             float scaleHeight = (float)Math.Cos(angle * Math.PI / 180.0);
             
-            // Создаем точки для отрисовки сложенной панели - КЛЮЧЕВОЕ ИЗМЕНЕНИЕ
+            // Create points for drawing folded panel - KEY CHANGE
             Point[] destPoints = new Point[3];
             
-            // Верхние углы двигаются вниз (сложение идет сверху)
-            destPoints[0] = new Point(0, (int)(halfHeight * (1 - scaleHeight))); // Левый верхний угол - двигается вниз
-            destPoints[1] = new Point(this.Width, (int)(halfHeight * (1 - scaleHeight))); // Правый верхний угол - двигается вниз
-            destPoints[2] = new Point(0, halfHeight); // Левый нижний угол - остается неподвижным
+            // Top corners move down (folding goes from top)
+            destPoints[0] = new Point(0, (int)(halfHeight * (1 - scaleHeight))); // Left top corner - moves down
+            destPoints[1] = new Point(this.Width, (int)(halfHeight * (1 - scaleHeight))); // Right top corner - moves down
+            destPoints[2] = new Point(0, halfHeight); // Left bottom corner - remains stationary
             
-            // Рисуем трансформированное изображение
+            // Draw transformed image
             g.DrawImage(bmp, destPoints);
             
-            // Добавляем затенение в зависимости от угла поворота
+            // Add shadow depending on rotation angle
             int shadowAlpha = (int)(150 * (1.0 - Math.Cos(angle * Math.PI / 180.0)));
             using (var brush = new SolidBrush(Color.FromArgb(shadowAlpha, 0, 0, 0)))
             {
                 g.FillPolygon(brush, destPoints);
             }
             
-            // Добавляем линию сверху складывающейся панели
+            // Add line at top of folding panel
             using (var pen = new Pen(Color.FromArgb(5, 5, 5), 1))
             {
                 g.DrawLine(pen, 
@@ -2033,24 +2051,24 @@ public class FlipDigit : Panel
         }
     }
     
-    // Вспомогательный метод для создания скругленного прямоугольника
+    // Helper method to create rounded rectangle
     private GraphicsPath CreateRoundedRectangle(Rectangle bounds, int radius)
     {
         GraphicsPath path = new GraphicsPath();
         
-        // Верхний левый угол
+        // Top left corner
         path.AddArc(bounds.X, bounds.Y, radius * 2, radius * 2, 180, 90);
         
-        // Верхняя сторона и верхний правый угол
+        // Top side and top right corner
         path.AddArc(bounds.X + bounds.Width - radius * 2, bounds.Y, radius * 2, radius * 2, 270, 90);
         
-        // Правая сторона и нижний правый угол
+        // Right side and bottom right corner
         path.AddArc(bounds.X + bounds.Width - radius * 2, bounds.Y + bounds.Height - radius * 2, radius * 2, radius * 2, 0, 90);
         
-        // Нижняя сторона и нижний левый угол
+        // Bottom side and bottom left corner
         path.AddArc(bounds.X, bounds.Y + bounds.Height - radius * 2, radius * 2, radius * 2, 90, 90);
         
-        // Закрываем путь
+        // Close path
         path.CloseFigure();
         
         return path;
