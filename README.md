@@ -2,6 +2,9 @@
 
 A compact widget application for Windows with clock, timer, and stopwatch functionality.
 
+![Clock Mode](WinTimer-clock.png)\
+![Timer Mode](WinTimer-countdown.png)
+
 [Русская версия ниже](#wintimer-ru)
 
 ## Features
