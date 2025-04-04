@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0-windows</TargetFramework>
+        <OutputType>WinExe</OutputType>
+        <Nullable>enable</Nullable>
+        <UseWindowsForms>true</UseWindowsForms>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+        <DebugType>none</DebugType>
+        <DebugSymbols>false</DebugSymbols>
+        <InvariantGlobalization>true</InvariantGlobalization>
+        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    </PropertyGroup>
+
+    <!-- Общие настройки для всех конфигураций -->
+    <PropertyGroup>
+        <Version>1.0.0</Version>
+        <Authors>Aleksey</Authors>
+        <Product>WinTimer</Product>
+        <Description>Compact Windows Timer Widget</Description>
+    </PropertyGroup>
+
+    <!-- Настройки для автономной версии -->
+    <PropertyGroup Condition="'$(Configuration)'=='Standalone'">
+        <PublishSingleFile>true</PublishSingleFile>
+        <SelfContained>true</SelfContained>
+        <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+        <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+        <PublishDir>bin\Standalone</PublishDir>
+    </PropertyGroup>
+
+    <!-- Настройки для версии, требующей .NET Runtime -->
+    <PropertyGroup Condition="'$(Configuration)'=='Dependent'">
+        <PublishSingleFile>true</PublishSingleFile>
+        <SelfContained>false</SelfContained>
+        <PublishDir>bin\Dependent</PublishDir>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <EmbeddedResource Remove="**\*.resx" />
+    </ItemGroup>
+
+</Project>
