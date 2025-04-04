@@ -6,59 +6,77 @@ using System.Windows.Forms;
 
 public class MainForm : Form
 {
-    private Timer timerClock;
-    private Timer timerCountdown;
-    private Timer timerStopwatch;
-    
-    private Label lblTime;
-    private Button btnTimer;
-    private Button btnStopwatch;
-    private Button btnTopMost;
-    private Button btnClock;
-    private Button btnClose;
-    
-    private Panel pnlMainControls;
-    private Panel pnlTimerControls;
-    private Panel pnlStopwatchControls;
-    
-    private Button btnStartTimer;
-    private Button btnPauseTimer;
-    private Button btnResetTimer;
-    
-    private Button btnStartStopwatch;
-    private Button btnPauseStopwatch;
-    private Button btnResetStopwatch;
-    
-    private TimeSpan countdownTime = TimeSpan.Zero;
-    private TimeSpan stopwatchTime = TimeSpan.Zero;
-    
-    // Базовые размеры для масштабирования
+    #region Constants
     private const int BASE_WIDTH = 250;
     private const int BASE_HEIGHT = 150;
     private const int BASE_FONT_SIZE = 25;
     private const int BASE_BUTTON_FONT_SIZE = 14;
     private const int RESIZE_BORDER = 5;
-    
-    
-    // Общий стиль для всех кнопок
-    private static readonly Font BUTTON_FONT = new Font("Segoe UI", BASE_BUTTON_FONT_SIZE, FontStyle.Regular);
-
     private const float ASPECT_RATIO = BASE_WIDTH / (float)BASE_HEIGHT;
-    private bool isResizing = false;
-    
+    private static readonly Font BUTTON_FONT = new Font("Segoe UI", BASE_BUTTON_FONT_SIZE, FontStyle.Regular);
+    #endregion
+
+    #region Enums
     private enum Mode
     {
         Clock,
         Timer,
         Stopwatch
     }
-    
+    #endregion
+
+    #region Timers
+    private Timer timerClock;
+    private Timer timerCountdown;
+    private Timer timerStopwatch;
+    #endregion
+
+    #region Main Controls
+    private Label lblTime;
+    private Panel pnlMainControls;
+    private Button btnTimer;
+    private Button btnStopwatch;
+    private Button btnTopMost;
+    private Button btnClock;
+    private Button btnClose;
+    #endregion
+
+    #region Timer Controls
+    private Panel pnlTimerControls;
+    private Button btnStartTimer;
+    private Button btnPauseTimer;
+    private Button btnResetTimer;
+    private TimeSpan countdownTime = TimeSpan.Zero;
+    #endregion
+
+    #region Stopwatch Controls
+    private Panel pnlStopwatchControls;
+    private Button btnStartStopwatch;
+    private Button btnPauseStopwatch;
+    private Button btnResetStopwatch;
+    private TimeSpan stopwatchTime = TimeSpan.Zero;
+    #endregion
+
+    #region State Variables
+    private bool isResizing = false;
     private Mode currentMode = Mode.Clock;
     
-    // Переменные для перетаскивания окна
+    // Variables for window dragging
     private bool isDragging = false;
     private Point dragStartPoint;
-    
+    #endregion
+
+    public MainForm()
+    {
+        InitializeComponent();
+        InitializeTimers();
+        UpdateDisplay();
+        
+        this.Resize += MainForm_Resize;
+        this.Icon = AppIcon.GetAppIcon();
+    }
+
+    #region Window Handling
     protected override void WndProc(ref Message m)
     {
         const int WM_NCHITTEST = 0x0084;
@@ -92,23 +110,123 @@ public class MainForm : Form
         
         base.WndProc(ref m);
     }
-    
-    public MainForm()
+
+    private void MainForm_MouseDown(object? sender, MouseEventArgs e)
     {
-        InitializeComponent();
-        InitializeTimers();
-        UpdateDisplay();
-        
-        // Добавляем обработчик изменения размера
-        this.Resize += MainForm_Resize;
-        
-        // Устанавливаем иконку приложения
-        this.Icon = AppIcon.GetAppIcon();
+        if (e.Button == MouseButtons.Left)
+        {
+            isDragging = true;
+            Point screenPoint = (sender as Control)?.PointToScreen(new Point(e.X, e.Y)) ?? Point.Empty;
+            dragStartPoint = PointToClient(screenPoint);
+        }
     }
     
+    private void MainForm_MouseMove(object? sender, MouseEventArgs e)
+    {
+        if (isDragging)
+        {
+            Point screenPoint = (sender as Control)?.PointToScreen(new Point(e.X, e.Y)) ?? Point.Empty;
+            Point clientPoint = PointToClient(screenPoint);
+            Location = new Point(
+                Location.X + (clientPoint.X - dragStartPoint.X),
+                Location.Y + (clientPoint.Y - dragStartPoint.Y)
+            );
+        }
+    }
+    
+    private void MainForm_MouseUp(object? sender, MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left)
+        {
+            isDragging = false;
+        }
+    }
+
+    private void MainForm_Resize(object? sender, EventArgs e)
+    {
+        if (lblTime == null || isResizing) return;
+        
+        try
+        {
+            isResizing = true;
+            
+            // Maintain aspect ratio
+            float currentRatio = this.Width / (float)this.Height;
+            
+            if (Math.Abs(currentRatio - ASPECT_RATIO) > 0.01f)
+            {
+                if (this.Width != this.RestoreBounds.Width)
+                {
+                    this.Height = (int)(this.Width / ASPECT_RATIO);
+                }
+                else
+                {
+                    this.Width = (int)(this.Height * ASPECT_RATIO);
+                }
+            }
+            
+            float scale = this.Width / (float)BASE_WIDTH;
+            
+            // Scale font for time label
+            lblTime.Font = new Font(lblTime.Font.FontFamily, BASE_FONT_SIZE * scale, FontStyle.Bold);
+            lblTime.Height = (int)(50 * scale);
+            
+            // Scale all buttons
+            ScaleButton(btnTimer, scale);
+            ScaleButton(btnStopwatch, scale);
+            ScaleButton(btnClock, scale);
+            ScaleButton(btnTopMost, scale);
+            ScaleButton(btnClose, scale);
+            
+            ScaleButton(btnStartTimer, scale);
+            ScaleButton(btnPauseTimer, scale);
+            ScaleButton(btnResetTimer, scale);
+            
+            ScaleButton(btnStartStopwatch, scale);
+            ScaleButton(btnPauseStopwatch, scale);
+            ScaleButton(btnResetStopwatch, scale);
+            
+            // Update panel sizes and button positions
+            pnlMainControls.Height = (int)(40 * scale);
+            UpdateButtonPositions(scale);
+
+            pnlTimerControls.Height = (int)(40 * scale);
+            UpdateTimerControlsPositions(scale);
+
+            pnlStopwatchControls.Height = (int)(40 * scale);
+            UpdateStopwatchControlsPositions(scale);
+        }
+        finally
+        {
+            isResizing = false;
+        }
+    }
+
+    public void AddHandlers(Control control)
+    {
+        control.MouseDown += MainForm_MouseDown;
+        control.MouseMove += MainForm_MouseMove;
+        control.MouseUp += MainForm_MouseUp;
+    }
+
+    private void FlashWindow()
+    {
+        for (int i = 0; i < 10; i++)
+        {
+            this.BackColor = Color.Red;
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(200);
+            this.BackColor = Color.FromArgb(0, 0, 0);
+            Application.DoEvents();
+            System.Threading.Thread.Sleep(200);
+        }
+    }
+    #endregion
+
+    #region Controls Initialization
     private void InitializeComponent()
     {
-        // Настройка формы
+        // Form setup
         this.Text = "WinTimer";
         this.Size = new Size(BASE_WIDTH, BASE_HEIGHT);
         this.FormBorderStyle = FormBorderStyle.None;
@@ -119,10 +237,24 @@ public class MainForm : Form
         this.MinimumSize = new Size(200, 120);
         this.Padding = new Padding(RESIZE_BORDER);
 
-        // Добавляем обработчик для перетаскивания окна
+        // Add handlers for window dragging
         AddHandlers(this);
         
-        // Создание элементов управления
+        InitializeMainControls();
+        InitializeTimerControls();
+        InitializeStopwatchControls();
+        InitializeTimerContextMenu();
+        
+        // Add panels to form
+        this.Controls.Add(pnlTimerControls);
+        this.Controls.Add(pnlStopwatchControls);
+        this.Controls.Add(pnlMainControls);
+        this.Controls.Add(lblTime);
+    }
+
+    private void InitializeMainControls()
+    {
+        // Time display label
         lblTime = new Label
         {
             Text = "00:00:00",
@@ -134,6 +266,7 @@ public class MainForm : Form
         };
         AddHandlers(lblTime);
         
+        // Main control panel
         pnlMainControls = new Panel
         {
             Dock = DockStyle.Top,
@@ -142,32 +275,38 @@ public class MainForm : Form
         };
         AddHandlers(pnlMainControls);
         
+        // Create main control buttons
         btnTimer = CreateButton("⏱️");
         btnStopwatch = CreateButton("⏲️");
         btnClock = CreateButton("🕒");
         btnClock.Visible = false;
         btnTopMost = CreateButton("📌");
-        
         btnClose = CreateButton("✖");
-        btnClose.Click += (s, e) => {
-            this.Close();
-        };
+        btnClose.Click += (s, e) => this.Close();
         
-        // Добавление элементов на форму
+        // Add buttons to panel
         pnlMainControls.Controls.Add(btnTimer);
         pnlMainControls.Controls.Add(btnStopwatch);
         pnlMainControls.Controls.Add(btnClock);
         pnlMainControls.Controls.Add(btnTopMost);
         pnlMainControls.Controls.Add(btnClose);
         
-        // Расположение кнопок в панели
+        // Position buttons
         btnTimer.Location = new Point((int)(10), (int)(5));
         btnStopwatch.Location = new Point((int)(60), (int)(5));
         btnClock.Location = new Point((int)(110), (int)(5));
         btnTopMost.Location = new Point((int)(155), (int)(5));
         btnClose.Location = new Point((int)(200), (int)(5));
         
-        // Панель для контролов таймера и секундомера
+        // Attach event handlers
+        btnTimer.Click += BtnTimer_Click;
+        btnStopwatch.Click += BtnStopwatch_Click;
+        btnClock.Click += BtnClock_Click;
+        btnTopMost.Click += BtnTopMost_Click;
+    }
+
+    private void InitializeTimerControls()
+    {
         pnlTimerControls = new Panel
         {
             Dock = DockStyle.Bottom,
@@ -176,6 +315,25 @@ public class MainForm : Form
         };
         AddHandlers(pnlTimerControls);
         
+        btnStartTimer = CreateButton("▶️");
+        btnPauseTimer = CreateButton("⏸️");
+        btnResetTimer = CreateButton("🔄");
+        
+        pnlTimerControls.Controls.Add(btnStartTimer);
+        pnlTimerControls.Controls.Add(btnPauseTimer);
+        pnlTimerControls.Controls.Add(btnResetTimer);
+        
+        btnStartTimer.Location = new Point((int)(50), (int)(5));
+        btnPauseTimer.Location = new Point((int)(100), (int)(5));
+        btnResetTimer.Location = new Point((int)(150), (int)(5));
+        
+        btnStartTimer.Click += BtnStartTimerClick;
+        btnPauseTimer.Click += BtnPauseTimerClick;
+        btnResetTimer.Click += BtnResetTimerClick;
+    }
+
+    private void InitializeStopwatchControls()
+    {
         pnlStopwatchControls = new Panel
         {
             Dock = DockStyle.Bottom,
@@ -184,22 +342,6 @@ public class MainForm : Form
         };
         AddHandlers(pnlStopwatchControls);
         
-        // Кнопки управления с тем же шрифтом
-        btnStartTimer = CreateButton("▶️");
-        btnPauseTimer = CreateButton("⏸️");
-        btnResetTimer = CreateButton("🔄");
-        
-        // Добавление кнопок управления на панели
-        pnlTimerControls.Controls.Add(btnStartTimer);
-        pnlTimerControls.Controls.Add(btnPauseTimer);
-        pnlTimerControls.Controls.Add(btnResetTimer);
-        
-        // Расположение кнопок управления
-        btnStartTimer.Location = new Point((int)(50), (int)(5));
-        btnPauseTimer.Location = new Point((int)(100), (int)(5));
-        btnResetTimer.Location = new Point((int)(150), (int)(5));
-        
-        // Создаем отдельные кнопки для секундомера с тем же шрифтом
         btnStartStopwatch = CreateButton("▶️");
         btnPauseStopwatch = CreateButton("⏸️");
         btnResetStopwatch = CreateButton("🔄");
@@ -208,25 +350,9 @@ public class MainForm : Form
         pnlStopwatchControls.Controls.Add(btnPauseStopwatch);
         pnlStopwatchControls.Controls.Add(btnResetStopwatch);
         
-        // Расположение кнопок управления
         btnStartStopwatch.Location = new Point((int)(50), (int)(5));
         btnPauseStopwatch.Location = new Point((int)(100), (int)(5));
         btnResetStopwatch.Location = new Point((int)(150), (int)(5));
-        
-        // Добавление панелей на форму
-        this.Controls.Add(pnlTimerControls);
-        this.Controls.Add(pnlStopwatchControls);
-        this.Controls.Add(pnlMainControls);
-        this.Controls.Add(lblTime);
-        
-        // Привязка обработчиков событий
-        btnTimer.Click += BtnTimer_Click;
-        btnStopwatch.Click += BtnStopwatch_Click;
-        btnClock.Click += BtnClock_Click;
-        btnTopMost.Click += BtnTopMost_Click;
-        btnStartTimer.Click += BtnStartTimerClick;
-        btnPauseTimer.Click += BtnPauseTimerClick;
-        btnResetTimer.Click += BtnResetTimerClick;
         
         btnStartStopwatch.Click += (s, e) => {
             timerStopwatch?.Start();
@@ -247,8 +373,10 @@ public class MainForm : Form
             btnPauseStopwatch.Enabled = false;
             UpdateDisplay();
         };
-        
-        // Создание контекстного меню для таймера
+    }
+
+    private void InitializeTimerContextMenu()
+    {
         ContextMenuStrip timerMenu = new ContextMenuStrip();
         timerMenu.Items.Add("1 минута", null, TimerMenuItem_Click);
         timerMenu.Items.Add("5 минут", null, TimerMenuItem_Click);
@@ -258,10 +386,10 @@ public class MainForm : Form
         timerMenu.Items.Add("1 час", null, TimerMenuItem_Click);
         btnTimer.ContextMenuStrip = timerMenu;
     }
-    
+
     private void InitializeTimers()
     {
-        // Таймер для часов
+        // Clock timer
         timerClock = new Timer
         {
             Interval = 1000
@@ -269,21 +397,78 @@ public class MainForm : Form
         timerClock.Tick += TimerClock_Tick;
         timerClock.Start();
         
-        // Таймер для обратного отсчета
+        // Countdown timer
         timerCountdown = new Timer
         {
             Interval = 1000
         };
         timerCountdown.Tick += TimerCountdown_Tick;
         
-        // Таймер для секундомера
+        // Stopwatch timer
         timerStopwatch = new Timer
         {
             Interval = 1000
         };
         timerStopwatch.Tick += TimerStopwatch_Tick;
     }
+    #endregion
+
+    #region UI Helpers
+    public Button CreateButton(string text)
+    {
+        var button = new Button
+        {
+            Text = text,
+            Width = (int)(40),
+            Height = (int)(30),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(50, 50, 50),
+            ForeColor = Color.White,
+            Margin = new Padding(0),
+            Font = BUTTON_FONT,
+            FlatAppearance =
+            {
+                BorderSize = 0
+            }
+        };
+        AddHandlers(button);
+        return button;
+    }
+
+    private void ScaleButton(Button? button, float scale)
+    {
+        if (button == null) return;
+        
+        button.Width = (int)(40 * scale);
+        button.Height = (int)(30 * scale);
+        button.Font = new Font(button.Font.FontFamily, BASE_BUTTON_FONT_SIZE * scale, FontStyle.Regular);
+    }
     
+    private void UpdateButtonPositions(float scale)
+    {
+        btnTimer.Location = new Point((int)(10 * scale), (int)(5 * scale));
+        btnStopwatch.Location = new Point((int)(60 * scale), (int)(5 * scale));
+        btnClock.Location = new Point((int)(110 * scale), (int)(5 * scale));
+        btnTopMost.Location = new Point((int)(155 * scale), (int)(5 * scale));
+        btnClose.Location = new Point((int)(200 * scale), (int)(5 * scale));
+    }
+    
+    private void UpdateTimerControlsPositions(float scale)
+    {
+        btnStartTimer.Location = new Point((int)(50 * scale), (int)(5 * scale));
+        btnPauseTimer.Location = new Point((int)(100 * scale), (int)(5 * scale));
+        btnResetTimer.Location = new Point((int)(150 * scale), (int)(5 * scale));
+    }
+    
+    private void UpdateStopwatchControlsPositions(float scale)
+    {
+        btnStartStopwatch.Location = new Point((int)(50 * scale), (int)(5 * scale));
+        btnPauseStopwatch.Location = new Point((int)(100 * scale), (int)(5 * scale));
+        btnResetStopwatch.Location = new Point((int)(150 * scale), (int)(5 * scale));
+    }
+    #endregion
+
+    #region Timer Event Handlers
     private void TimerClock_Tick(object sender, EventArgs e)
     {
         if (currentMode == Mode.Clock)
@@ -305,7 +490,7 @@ public class MainForm : Form
             
             UpdateDisplay();
             
-            // Уведомление о завершении таймера
+            // Notify when timer completes
             this.FlashWindow();
             MessageBox.Show("Время истекло!", "WinTimer", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
@@ -318,63 +503,9 @@ public class MainForm : Form
         stopwatchTime = stopwatchTime.Add(TimeSpan.FromSeconds(1));
         UpdateDisplay();
     }
-    
-    private void UpdateDisplay()
-    {
-        switch (currentMode)
-        {
-            case Mode.Clock:
-                lblTime.Text = DateTime.Now.ToString("HH:mm:ss");
-                break;
-            case Mode.Timer:
-                lblTime.Text = countdownTime.ToString(@"hh\:mm\:ss");
-                break;
-            case Mode.Stopwatch:
-                lblTime.Text = stopwatchTime.ToString(@"hh\:mm\:ss");
-                break;
-        }
-    }
-    
-    private void BtnTimer_Click(object sender, EventArgs e)
-    {
-        btnTimer?.ContextMenuStrip?.Show(btnTimer, new Point(0, btnTimer.Height));
-    }
-    
-    private void TimerMenuItem_Click(object sender, EventArgs e)
-    {
-        if (sender is not ToolStripMenuItem item) return;
-        string text = item.Text;
-        
-        switch (text)
-        {
-            case "1 минута":
-                countdownTime = TimeSpan.FromMinutes(1);
-                break;
-            case "5 минут":
-                countdownTime = TimeSpan.FromMinutes(5);
-                break;
-            case "10 минут":
-                countdownTime = TimeSpan.FromMinutes(10);
-                break;
-            case "15 минут":
-                countdownTime = TimeSpan.FromMinutes(15);
-                break;
-            case "30 минут":
-                countdownTime = TimeSpan.FromMinutes(30);
-                break;
-            case "1 час":
-                countdownTime = TimeSpan.FromHours(1);
-                break;
-        }
-        
-        SwitchToTimerMode();
-    }
-    
-    private void BtnClock_Click(object? sender, EventArgs e)
-    {
-        SwitchToClockMode();
-    }
-    
+    #endregion
+
+    #region Mode Switching
     private void SwitchToClockMode()
     {
         currentMode = Mode.Clock;
@@ -414,7 +545,7 @@ public class MainForm : Form
         UpdateDisplay();
     }
     
-    private void BtnStopwatch_Click(object? sender, EventArgs e)
+    private void SwitchToStopwatchMode()
     {
         currentMode = Mode.Stopwatch;
         timerClock?.Stop();
@@ -433,6 +564,23 @@ public class MainForm : Form
         btnResetStopwatch!.Enabled = true;
         
         UpdateDisplay();
+    }
+    #endregion
+
+    #region Button Event Handlers
+    private void BtnTimer_Click(object sender, EventArgs e)
+    {
+        btnTimer?.ContextMenuStrip?.Show(btnTimer, new Point(0, btnTimer.Height));
+    }
+    
+    private void BtnClock_Click(object? sender, EventArgs e)
+    {
+        SwitchToClockMode();
+    }
+    
+    private void BtnStopwatch_Click(object? sender, EventArgs e)
+    {
+        SwitchToStopwatchMode();
     }
     
     private void BtnTopMost_Click(object sender, EventArgs e)
@@ -489,175 +637,52 @@ public class MainForm : Form
         UpdateDisplay();
     }
     
-    // Метод для мигания окна при завершении таймера
-    private void FlashWindow()
+    private void TimerMenuItem_Click(object sender, EventArgs e)
     {
-        for (int i = 0; i < 10; i++)
-        {
-            this.BackColor = Color.Red;
-            Application.DoEvents();
-            System.Threading.Thread.Sleep(200);
-            this.BackColor = Color.FromArgb(0, 0, 0);
-            Application.DoEvents();
-            System.Threading.Thread.Sleep(200);
-        }
-    }
-    
-    // Изменяем метод MainForm_MouseDown для работы с любым контролом
-    private void MainForm_MouseDown(object? sender, MouseEventArgs e)
-    {
-        if (e.Button == MouseButtons.Left)
-        {
-            isDragging = true;
-            // Получаем координаты относительно формы
-            Point screenPoint = (sender as Control)?.PointToScreen(new Point(e.X, e.Y)) ?? Point.Empty;
-            dragStartPoint = PointToClient(screenPoint);
-        }
-    }
-    
-    // Изменяем метод MainForm_MouseMove для работы с любым контролом
-    private void MainForm_MouseMove(object? sender, MouseEventArgs e)
-    {
-        if (isDragging)
-        {
-            Point screenPoint = (sender as Control)?.PointToScreen(new Point(e.X, e.Y)) ?? Point.Empty;
-            Point clientPoint = PointToClient(screenPoint);
-            Location = new Point(
-                Location.X + (clientPoint.X - dragStartPoint.X),
-                Location.Y + (clientPoint.Y - dragStartPoint.Y)
-            );
-        }
-    }
-    
-    private void MainForm_MouseUp(object? sender, MouseEventArgs e)
-    {
-        if (e.Button == MouseButtons.Left)
-        {
-            isDragging = false;
-        }
-    }
-
-    private void MainForm_Resize(object? sender, EventArgs e)
-    {
-        if (lblTime == null || isResizing) return;
+        if (sender is not ToolStripMenuItem item) return;
+        string text = item.Text;
         
-        try
+        switch (text)
         {
-            isResizing = true;
-            
-            // Сохраняем пропорции
-            float currentRatio = this.Width / (float)this.Height;
-            
-            if (Math.Abs(currentRatio - ASPECT_RATIO) > 0.01f) // Допуск на погрешность
-            {
-                // Определяем, какая сторона изменилась последней
-                if (this.Width != this.RestoreBounds.Width)
-                {
-                    // Изменилась ширина - подстраиваем высоту
-                    this.Height = (int)(this.Width / ASPECT_RATIO);
-                }
-                else
-                {
-                    // Изменилась высота - подстраиваем ширину
-                    this.Width = (int)(this.Height * ASPECT_RATIO);
-                }
-            }
-            
-            // Вычисляем масштаб
-            float scale = this.Width / (float)BASE_WIDTH;
-            
-            // Масштабируем шрифт метки времени
-            lblTime.Font = new Font(lblTime.Font.FontFamily, BASE_FONT_SIZE * scale, FontStyle.Bold);
-            lblTime.Height = (int)(50 * scale);
-            
-            // Масштабируем все кнопки
-            ScaleButton(btnTimer, scale);
-            ScaleButton(btnStopwatch, scale);
-            ScaleButton(btnClock, scale);
-            ScaleButton(btnTopMost, scale);
-            ScaleButton(btnClose, scale);
-            
-            ScaleButton(btnStartTimer, scale);
-            ScaleButton(btnPauseTimer, scale);
-            ScaleButton(btnResetTimer, scale);
-            
-            ScaleButton(btnStartStopwatch, scale);
-            ScaleButton(btnPauseStopwatch, scale);
-            ScaleButton(btnResetStopwatch, scale);
-            
-            // Обновляем размеры панелей
-            pnlMainControls.Height = (int)(40 * scale);
-            UpdateButtonPositions(scale);
-
-            pnlTimerControls.Height = (int)(40 * scale);
-            UpdateTimerControlsPositions(scale);
-
-            pnlStopwatchControls.Height = (int)(40 * scale);
-            UpdateStopwatchControlsPositions(scale);
+            case "1 минута":
+                countdownTime = TimeSpan.FromMinutes(1);
+                break;
+            case "5 минут":
+                countdownTime = TimeSpan.FromMinutes(5);
+                break;
+            case "10 минут":
+                countdownTime = TimeSpan.FromMinutes(10);
+                break;
+            case "15 минут":
+                countdownTime = TimeSpan.FromMinutes(15);
+                break;
+            case "30 минут":
+                countdownTime = TimeSpan.FromMinutes(30);
+                break;
+            case "1 час":
+                countdownTime = TimeSpan.FromHours(1);
+                break;
         }
-        finally
-        {
-            isResizing = false;
-        }
-    }
-    
-    private void ScaleButton(Button? button, float scale)
-    {
-        if (button == null) return;
         
-        button.Width = (int)(40 * scale);
-        button.Height = (int)(30 * scale);
-        button.Font = new Font(button.Font.FontFamily, BASE_BUTTON_FONT_SIZE * scale, FontStyle.Regular);
+        SwitchToTimerMode();
     }
-    
-    private void UpdateButtonPositions(float scale)
-    {
-        btnTimer.Location = new Point((int)(10 * scale), (int)(5 * scale));
-        btnStopwatch.Location = new Point((int)(60 * scale), (int)(5 * scale));
-        btnClock.Location = new Point((int)(110 * scale), (int)(5 * scale));
-        btnTopMost.Location = new Point((int)(155 * scale), (int)(5 * scale));
-        btnClose.Location = new Point((int)(200 * scale), (int)(5 * scale));
-    }
-    
-    private void UpdateTimerControlsPositions(float scale)
-    {
-        btnStartTimer.Location = new Point((int)(50 * scale), (int)(5 * scale));
-        btnPauseTimer.Location = new Point((int)(100 * scale), (int)(5 * scale));
-        btnResetTimer.Location = new Point((int)(150 * scale), (int)(5 * scale));
-    }
-    
-    private void UpdateStopwatchControlsPositions(float scale)
-    {
-        btnStartStopwatch.Location = new Point((int)(50 * scale), (int)(5 * scale));
-        btnPauseStopwatch.Location = new Point((int)(100 * scale), (int)(5 * scale));
-        btnResetStopwatch.Location = new Point((int)(150 * scale), (int)(5 * scale));
-    }
+    #endregion
 
-    public Button CreateButton(string text)
+    #region Display Update
+    private void UpdateDisplay()
     {
-        var button = new Button
+        switch (currentMode)
         {
-            Text = text,
-            Width = (int)(40),
-            Height = (int)(30),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(50, 50, 50),
-            ForeColor = Color.White,
-            Margin = new Padding(0),
-            Font = BUTTON_FONT,
-            FlatAppearance =
-            {
-                BorderSize = 0
-            }
-        };
-        AddHandlers(button);
-        return button;
+            case Mode.Clock:
+                lblTime.Text = DateTime.Now.ToString("HH:mm:ss");
+                break;
+            case Mode.Timer:
+                lblTime.Text = countdownTime.ToString(@"hh\:mm\:ss");
+                break;
+            case Mode.Stopwatch:
+                lblTime.Text = stopwatchTime.ToString(@"hh\:mm\:ss");
+                break;
+        }
     }
-
-    public void AddHandlers(Control control)
-    {
-        control.MouseDown += MainForm_MouseDown;
-        control.MouseMove += MainForm_MouseMove;
-        control.MouseUp += MainForm_MouseUp;
-    }
+    #endregion
 } 
