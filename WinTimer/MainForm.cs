@@ -2,14 +2,15 @@ namespace WinTimer;
 
 using System;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Windows.Forms;
 
 public class MainForm : Form
 {
     #region Constants
-    private const int BASE_WIDTH = 250;
-    private const int BASE_HEIGHT = 150;
-    private const int BASE_FONT_SIZE = 25;
+    private const int BASE_WIDTH = 320;
+    private const int BASE_HEIGHT = 180;
+    private const int BASE_FONT_SIZE = 40;
     private const int BASE_BUTTON_FONT_SIZE = 14;
     private const int RESIZE_BORDER = 5;
     private const float ASPECT_RATIO = BASE_WIDTH / (float)BASE_HEIGHT;
@@ -31,35 +32,31 @@ public class MainForm : Form
     private Timer timerStopwatch;
     #endregion
 
-    #region Main Controls
-    private Label lblTime;
-    private Panel pnlMainControls;
+    #region Flip Display Controls
+    private Panel pnlTimeDisplay;
+    private FlipDigit[] hourDigits;
+    private FlipDigit[] minuteDigits;
+    private FlipDigit[] secondDigits;
+    private Label[] separators;
+    #endregion
+
+    #region Control Buttons
+    private Panel pnlControls;
+    private Button btnClock;
     private Button btnTimer;
     private Button btnStopwatch;
+    private Button btnStart;
+    private Button btnPause;
+    private Button btnReset;
     private Button btnTopMost;
-    private Button btnClock;
     private Button btnClose;
-    #endregion
-
-    #region Timer Controls
-    private Panel pnlTimerControls;
-    private Button btnStartTimer;
-    private Button btnPauseTimer;
-    private Button btnResetTimer;
-    private TimeSpan countdownTime = TimeSpan.Zero;
-    #endregion
-
-    #region Stopwatch Controls
-    private Panel pnlStopwatchControls;
-    private Button btnStartStopwatch;
-    private Button btnPauseStopwatch;
-    private Button btnResetStopwatch;
-    private TimeSpan stopwatchTime = TimeSpan.Zero;
     #endregion
 
     #region State Variables
     private bool isResizing = false;
     private Mode currentMode = Mode.Clock;
+    private TimeSpan countdownTime = TimeSpan.Zero;
+    private TimeSpan stopwatchTime = TimeSpan.Zero;
     
     // Variables for window dragging
     private bool isDragging = false;
@@ -144,7 +141,7 @@ public class MainForm : Form
 
     private void MainForm_Resize(object? sender, EventArgs e)
     {
-        if (lblTime == null || isResizing) return;
+        if (isResizing) return;
         
         try
         {
@@ -167,34 +164,26 @@ public class MainForm : Form
             
             float scale = this.Width / (float)BASE_WIDTH;
             
-            // Scale font for time label
-            lblTime.Font = new Font(lblTime.Font.FontFamily, BASE_FONT_SIZE * scale, FontStyle.Bold);
-            lblTime.Height = (int)(50 * scale);
-            
-            // Scale all buttons
-            ScaleButton(btnTimer, scale);
-            ScaleButton(btnStopwatch, scale);
-            ScaleButton(btnClock, scale);
-            ScaleButton(btnTopMost, scale);
-            ScaleButton(btnClose, scale);
-            
-            ScaleButton(btnStartTimer, scale);
-            ScaleButton(btnPauseTimer, scale);
-            ScaleButton(btnResetTimer, scale);
-            
-            ScaleButton(btnStartStopwatch, scale);
-            ScaleButton(btnPauseStopwatch, scale);
-            ScaleButton(btnResetStopwatch, scale);
-            
-            // Update panel sizes and button positions
-            pnlMainControls.Height = (int)(40 * scale);
-            UpdateButtonPositions(scale);
-
-            pnlTimerControls.Height = (int)(40 * scale);
-            UpdateTimerControlsPositions(scale);
-
-            pnlStopwatchControls.Height = (int)(40 * scale);
-            UpdateStopwatchControlsPositions(scale);
+            // Scale all controls
+            if (pnlTimeDisplay != null && pnlControls != null)
+            {
+                // Обновляем размеры панелей
+                pnlControls.Height = (int)(40 * scale);
+                
+                // Масштабируем элементы
+                ScaleFlipClockDisplay(scale);
+                ScaleControlPanel(scale);
+                
+                // Обновляем размещение на форме
+                this.Controls.Remove(pnlControls);
+                this.Controls.Remove(pnlTimeDisplay);
+                
+                this.Controls.Add(pnlControls);
+                this.Controls.Add(pnlTimeDisplay);
+                
+                // Обновляем отображение времени
+                UpdateDisplay();
+            }
         }
         finally
         {
@@ -234,145 +223,117 @@ public class MainForm : Form
         this.StartPosition = FormStartPosition.CenterScreen;
         this.BackColor = Color.FromArgb(0, 0, 0);
         this.ForeColor = Color.White;
-        this.MinimumSize = new Size(200, 120);
+        this.MinimumSize = new Size(240, 135);
         this.Padding = new Padding(RESIZE_BORDER);
 
         // Add handlers for window dragging
         AddHandlers(this);
         
-        InitializeMainControls();
-        InitializeTimerControls();
-        InitializeStopwatchControls();
-        InitializeTimerContextMenu();
+        // Инициализируем сначала панель управления, а затем дисплей времени
+        InitializeControlPanel();
+        InitializeTimeDisplay();
         
         // Add panels to form
-        this.Controls.Add(pnlTimerControls);
-        this.Controls.Add(pnlStopwatchControls);
-        this.Controls.Add(pnlMainControls);
-        this.Controls.Add(lblTime);
+        this.Controls.Add(pnlControls);
+        this.Controls.Add(pnlTimeDisplay);
     }
 
-    private void InitializeMainControls()
+    private void InitializeTimeDisplay()
     {
-        // Time display label
-        lblTime = new Label
+        // Main panel for time display
+        pnlTimeDisplay = new Panel
         {
-            Text = "00:00:00",
-            Font = new Font("Segoe UI", BASE_FONT_SIZE, FontStyle.Bold),
-            TextAlign = ContentAlignment.MiddleCenter,
-            Dock = DockStyle.Top,
-            Height = (int)(50),
-            ForeColor = Color.White
+            Dock = DockStyle.Fill,
+            Padding = new Padding(10)
         };
-        AddHandlers(lblTime);
+        AddHandlers(pnlTimeDisplay);
         
-        // Main control panel
-        pnlMainControls = new Panel
+        // Create flip digits for HH:MM:SS
+        hourDigits = new FlipDigit[2];
+        minuteDigits = new FlipDigit[2]; 
+        secondDigits = new FlipDigit[2];
+        separators = new Label[2];
+        
+        // Create individual digits
+        for (int i = 0; i < 2; i++)
         {
-            Dock = DockStyle.Top,
-            Height = (int)(40),
-            Padding = new Padding(1)
-        };
-        AddHandlers(pnlMainControls);
+            hourDigits[i] = new FlipDigit();
+            minuteDigits[i] = new FlipDigit();
+            secondDigits[i] = new FlipDigit();
+            
+            pnlTimeDisplay.Controls.Add(hourDigits[i]);
+            pnlTimeDisplay.Controls.Add(minuteDigits[i]);
+            pnlTimeDisplay.Controls.Add(secondDigits[i]);
+        }
         
-        // Create main control buttons
+        // Create separators (:)
+        for (int i = 0; i < 2; i++)
+        {
+            separators[i] = new Label
+            {
+                Text = ":",
+                Font = new Font("Segoe UI", BASE_FONT_SIZE, FontStyle.Bold),
+                ForeColor = Color.White,
+                TextAlign = ContentAlignment.MiddleCenter,
+                AutoSize = false
+            };
+            pnlTimeDisplay.Controls.Add(separators[i]);
+            AddHandlers(separators[i]);
+        }
+        
+        // Position all display elements
+        LayoutTimeDisplay(1.0f);
+    }
+
+    private void InitializeControlPanel()
+    {
+        // Control panel at the bottom
+        pnlControls = new Panel
+        {
+            Dock = DockStyle.Bottom,
+            Height = 40,
+            BackColor = Color.FromArgb(20, 20, 20)
+        };
+        AddHandlers(pnlControls);
+        
+        // Create all buttons
+        btnClock = CreateButton("🕒");
         btnTimer = CreateButton("⏱️");
         btnStopwatch = CreateButton("⏲️");
-        btnClock = CreateButton("🕒");
-        btnClock.Visible = false;
+        btnStart = CreateButton("▶️");
+        btnPause = CreateButton("⏸️");
+        btnReset = CreateButton("🔄");
         btnTopMost = CreateButton("📌");
         btnClose = CreateButton("✖");
-        btnClose.Click += (s, e) => this.Close();
         
-        // Add buttons to panel
-        pnlMainControls.Controls.Add(btnTimer);
-        pnlMainControls.Controls.Add(btnStopwatch);
-        pnlMainControls.Controls.Add(btnClock);
-        pnlMainControls.Controls.Add(btnTopMost);
-        pnlMainControls.Controls.Add(btnClose);
+        // Add all buttons to panel
+        pnlControls.Controls.Add(btnClock);
+        pnlControls.Controls.Add(btnTimer);
+        pnlControls.Controls.Add(btnStopwatch);
+        pnlControls.Controls.Add(btnStart);
+        pnlControls.Controls.Add(btnPause);
+        pnlControls.Controls.Add(btnReset);
+        pnlControls.Controls.Add(btnTopMost);
+        pnlControls.Controls.Add(btnClose);
         
         // Position buttons
-        btnTimer.Location = new Point((int)(10), (int)(5));
-        btnStopwatch.Location = new Point((int)(60), (int)(5));
-        btnClock.Location = new Point((int)(110), (int)(5));
-        btnTopMost.Location = new Point((int)(155), (int)(5));
-        btnClose.Location = new Point((int)(200), (int)(5));
+        LayoutControlPanel(1.0f);
+        
+        // Initial button state
+        UpdateButtonStates();
         
         // Attach event handlers
+        btnClock.Click += (s, e) => SwitchToClockMode();
         btnTimer.Click += BtnTimer_Click;
-        btnStopwatch.Click += BtnStopwatch_Click;
-        btnClock.Click += BtnClock_Click;
+        btnStopwatch.Click += (s, e) => SwitchToStopwatchMode();
+        btnStart.Click += BtnStart_Click;
+        btnPause.Click += BtnPause_Click;
+        btnReset.Click += BtnReset_Click;
         btnTopMost.Click += BtnTopMost_Click;
-    }
-
-    private void InitializeTimerControls()
-    {
-        pnlTimerControls = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = (int)(40),
-            Visible = false
-        };
-        AddHandlers(pnlTimerControls);
+        btnClose.Click += (s, e) => this.Close();
         
-        btnStartTimer = CreateButton("▶️");
-        btnPauseTimer = CreateButton("⏸️");
-        btnResetTimer = CreateButton("🔄");
-        
-        pnlTimerControls.Controls.Add(btnStartTimer);
-        pnlTimerControls.Controls.Add(btnPauseTimer);
-        pnlTimerControls.Controls.Add(btnResetTimer);
-        
-        btnStartTimer.Location = new Point((int)(50), (int)(5));
-        btnPauseTimer.Location = new Point((int)(100), (int)(5));
-        btnResetTimer.Location = new Point((int)(150), (int)(5));
-        
-        btnStartTimer.Click += BtnStartTimerClick;
-        btnPauseTimer.Click += BtnPauseTimerClick;
-        btnResetTimer.Click += BtnResetTimerClick;
-    }
-
-    private void InitializeStopwatchControls()
-    {
-        pnlStopwatchControls = new Panel
-        {
-            Dock = DockStyle.Bottom,
-            Height = (int)(40),
-            Visible = false
-        };
-        AddHandlers(pnlStopwatchControls);
-        
-        btnStartStopwatch = CreateButton("▶️");
-        btnPauseStopwatch = CreateButton("⏸️");
-        btnResetStopwatch = CreateButton("🔄");
-        
-        pnlStopwatchControls.Controls.Add(btnStartStopwatch);
-        pnlStopwatchControls.Controls.Add(btnPauseStopwatch);
-        pnlStopwatchControls.Controls.Add(btnResetStopwatch);
-        
-        btnStartStopwatch.Location = new Point((int)(50), (int)(5));
-        btnPauseStopwatch.Location = new Point((int)(100), (int)(5));
-        btnResetStopwatch.Location = new Point((int)(150), (int)(5));
-        
-        btnStartStopwatch.Click += (s, e) => {
-            timerStopwatch?.Start();
-            btnStartStopwatch.Enabled = false;
-            btnPauseStopwatch.Enabled = true;
-        };
-        
-        btnPauseStopwatch.Click += (s, e) => {
-            timerStopwatch?.Stop();
-            btnStartStopwatch.Enabled = true;
-            btnPauseStopwatch.Enabled = false;
-        };
-        
-        btnResetStopwatch.Click += (s, e) => {
-            timerStopwatch?.Stop();
-            stopwatchTime = TimeSpan.Zero;
-            btnStartStopwatch.Enabled = true;
-            btnPauseStopwatch.Enabled = false;
-            UpdateDisplay();
-        };
+        // Create timer context menu
+        InitializeTimerContextMenu();
     }
 
     private void InitializeTimerContextMenu()
@@ -444,27 +405,151 @@ public class MainForm : Form
         button.Font = new Font(button.Font.FontFamily, BASE_BUTTON_FONT_SIZE * scale, FontStyle.Regular);
     }
     
-    private void UpdateButtonPositions(float scale)
+    private void LayoutTimeDisplay(float scale)
     {
-        btnTimer.Location = new Point((int)(10 * scale), (int)(5 * scale));
-        btnStopwatch.Location = new Point((int)(60 * scale), (int)(5 * scale));
-        btnClock.Location = new Point((int)(110 * scale), (int)(5 * scale));
-        btnTopMost.Location = new Point((int)(155 * scale), (int)(5 * scale));
-        btnClose.Location = new Point((int)(200 * scale), (int)(5 * scale));
+        if (pnlTimeDisplay.Width <= 0 || pnlTimeDisplay.Height <= 0)
+        {
+            // В случае, если панель еще не размещена, используем размеры формы для приблизительного расчета
+            pnlTimeDisplay.Width = ClientSize.Width;
+            pnlTimeDisplay.Height = ClientSize.Height - (pnlControls?.Height ?? 40);
+        }
+        
+        int digitWidth = (int)(40 * scale);
+        int digitHeight = (int)(60 * scale);
+        int separatorWidth = (int)(15 * scale);
+        int totalWidth = 6 * digitWidth + 2 * separatorWidth;
+        
+        int startX = Math.Max(5, (pnlTimeDisplay.Width - totalWidth) / 2);
+        int controlsHeight = pnlControls?.Height ?? 40;
+        int y = Math.Max(5, (pnlTimeDisplay.Height - controlsHeight - digitHeight) / 2);
+        
+        int x = startX;
+        
+        // Position hour digits
+        for (int i = 0; i < 2; i++)
+        {
+            hourDigits[i].Width = digitWidth;
+            hourDigits[i].Height = digitHeight;
+            hourDigits[i].Location = new Point(x, y);
+            x += digitWidth;
+        }
+        
+        // First separator
+        separators[0].Width = separatorWidth;
+        separators[0].Height = digitHeight;
+        separators[0].Location = new Point(x, y);
+        separators[0].Font = new Font(separators[0].Font.FontFamily, BASE_FONT_SIZE * scale, FontStyle.Bold);
+        x += separatorWidth;
+        
+        // Position minute digits
+        for (int i = 0; i < 2; i++)
+        {
+            minuteDigits[i].Width = digitWidth;
+            minuteDigits[i].Height = digitHeight;
+            minuteDigits[i].Location = new Point(x, y);
+            x += digitWidth;
+        }
+        
+        // Second separator
+        separators[1].Width = separatorWidth;
+        separators[1].Height = digitHeight;
+        separators[1].Location = new Point(x, y);
+        separators[1].Font = new Font(separators[1].Font.FontFamily, BASE_FONT_SIZE * scale, FontStyle.Bold);
+        x += separatorWidth;
+        
+        // Position second digits
+        for (int i = 0; i < 2; i++)
+        {
+            secondDigits[i].Width = digitWidth;
+            secondDigits[i].Height = digitHeight;
+            secondDigits[i].Location = new Point(x, y);
+            x += digitWidth;
+        }
     }
     
-    private void UpdateTimerControlsPositions(float scale)
+    private void LayoutControlPanel(float scale)
     {
-        btnStartTimer.Location = new Point((int)(50 * scale), (int)(5 * scale));
-        btnPauseTimer.Location = new Point((int)(100 * scale), (int)(5 * scale));
-        btnResetTimer.Location = new Point((int)(150 * scale), (int)(5 * scale));
+        if (pnlControls.Width <= 0)
+        {
+            // В случае, если панель еще не размещена, используем ширину формы для приблизительного расчета
+            pnlControls.Width = ClientSize.Width;
+        }
+        
+        int buttonWidth = (int)(40 * scale);
+        int buttonHeight = (int)(30 * scale);
+        int gap = (int)(5 * scale);
+        
+        int totalWidth = 8 * buttonWidth + 7 * gap;
+        int startX = Math.Max(5, (pnlControls.Width - totalWidth) / 2);
+        int y = Math.Max(5, (pnlControls.Height - buttonHeight) / 2);
+        
+        int x = startX;
+        
+        // Position all buttons
+        btnClock.Location = new Point(x, y);
+        btnClock.Width = buttonWidth;
+        btnClock.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnTimer.Location = new Point(x, y);
+        btnTimer.Width = buttonWidth;
+        btnTimer.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnStopwatch.Location = new Point(x, y);
+        btnStopwatch.Width = buttonWidth;
+        btnStopwatch.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnStart.Location = new Point(x, y);
+        btnStart.Width = buttonWidth;
+        btnStart.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnPause.Location = new Point(x, y);
+        btnPause.Width = buttonWidth;
+        btnPause.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnReset.Location = new Point(x, y);
+        btnReset.Width = buttonWidth;
+        btnReset.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnTopMost.Location = new Point(x, y);
+        btnTopMost.Width = buttonWidth;
+        btnTopMost.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnClose.Location = new Point(x, y);
+        btnClose.Width = buttonWidth;
+        btnClose.Height = buttonHeight;
     }
     
-    private void UpdateStopwatchControlsPositions(float scale)
+    private void ScaleFlipClockDisplay(float scale)
     {
-        btnStartStopwatch.Location = new Point((int)(50 * scale), (int)(5 * scale));
-        btnPauseStopwatch.Location = new Point((int)(100 * scale), (int)(5 * scale));
-        btnResetStopwatch.Location = new Point((int)(150 * scale), (int)(5 * scale));
+        pnlTimeDisplay.Padding = new Padding((int)(10 * scale));
+        
+        // Resize and reposition all digits and separators
+        LayoutTimeDisplay(scale);
+    }
+    
+    private void ScaleControlPanel(float scale)
+    {
+        pnlControls.Height = (int)(40 * scale);
+        
+        // Scale buttons
+        ScaleButton(btnClock, scale);
+        ScaleButton(btnTimer, scale);
+        ScaleButton(btnStopwatch, scale);
+        ScaleButton(btnStart, scale);
+        ScaleButton(btnPause, scale);
+        ScaleButton(btnReset, scale);
+        ScaleButton(btnTopMost, scale);
+        ScaleButton(btnClose, scale);
+        
+        // Reposition buttons
+        LayoutControlPanel(scale);
     }
     #endregion
 
@@ -485,8 +570,7 @@ public class MainForm : Form
         {
             timerCountdown?.Stop();
             countdownTime = TimeSpan.Zero;
-            btnStartTimer!.Enabled = true;
-            btnPauseTimer!.Enabled = false;
+            UpdateButtonStates();
             
             UpdateDisplay();
             
@@ -513,14 +597,7 @@ public class MainForm : Form
         timerStopwatch?.Stop();
         timerClock?.Start();
         
-        pnlTimerControls!.Visible = false;
-        pnlStopwatchControls!.Visible = false;
-        
-        btnClock!.Visible = false;
-        btnTimer!.Visible = true;
-        btnStopwatch!.Visible = true;
-        btnTopMost!.Visible = true;
-        
+        UpdateButtonStates();
         UpdateDisplay();
     }
     
@@ -530,18 +607,7 @@ public class MainForm : Form
         timerClock?.Stop();
         timerStopwatch?.Stop();
         
-        pnlTimerControls!.Visible = true;
-        pnlStopwatchControls!.Visible = false;
-        
-        btnClock!.Visible = true;
-        btnTimer!.Visible = false;
-        btnStopwatch!.Visible = false;
-        btnTopMost!.Visible = true;
-        
-        btnStartTimer!.Enabled = true;
-        btnPauseTimer!.Enabled = false;
-        btnResetTimer!.Enabled = true;
-        
+        UpdateButtonStates();
         UpdateDisplay();
     }
     
@@ -551,19 +617,47 @@ public class MainForm : Form
         timerClock?.Stop();
         timerCountdown?.Stop();
         
-        pnlTimerControls!.Visible = false;
-        pnlStopwatchControls!.Visible = true;
-        
-        btnClock!.Visible = true;
-        btnTimer!.Visible = false;
-        btnStopwatch!.Visible = false;
-        btnTopMost!.Visible = true;
-        
-        btnStartStopwatch!.Enabled = true;
-        btnPauseStopwatch!.Enabled = false;
-        btnResetStopwatch!.Enabled = true;
-        
+        UpdateButtonStates();
         UpdateDisplay();
+    }
+    
+    private void UpdateButtonStates()
+    {
+        // Basic mode buttons are always visible
+        btnClock.Visible = true;
+        btnTimer.Visible = true;
+        btnStopwatch.Visible = true;
+        btnTopMost.Visible = true;
+        btnClose.Visible = true;
+        
+        // Control buttons visibility based on mode
+        switch (currentMode)
+        {
+            case Mode.Clock:
+                btnStart.Visible = false;
+                btnPause.Visible = false;
+                btnReset.Visible = false;
+                break;
+                
+            case Mode.Timer:
+            case Mode.Stopwatch:
+                btnStart.Visible = true;
+                btnPause.Visible = true;
+                btnReset.Visible = true;
+                
+                bool isRunning = currentMode == Mode.Timer ? 
+                    timerCountdown.Enabled : timerStopwatch.Enabled;
+                
+                btnStart.Enabled = !isRunning;
+                btnPause.Enabled = isRunning;
+                btnReset.Enabled = true;
+                break;
+        }
+        
+        // Highlight active mode button
+        btnClock.BackColor = currentMode == Mode.Clock ? Color.FromArgb(80, 80, 80) : Color.FromArgb(50, 50, 50);
+        btnTimer.BackColor = currentMode == Mode.Timer ? Color.FromArgb(80, 80, 80) : Color.FromArgb(50, 50, 50);
+        btnStopwatch.BackColor = currentMode == Mode.Stopwatch ? Color.FromArgb(80, 80, 80) : Color.FromArgb(50, 50, 50);
     }
     #endregion
 
@@ -573,23 +667,7 @@ public class MainForm : Form
         btnTimer?.ContextMenuStrip?.Show(btnTimer, new Point(0, btnTimer.Height));
     }
     
-    private void BtnClock_Click(object? sender, EventArgs e)
-    {
-        SwitchToClockMode();
-    }
-    
-    private void BtnStopwatch_Click(object? sender, EventArgs e)
-    {
-        SwitchToStopwatchMode();
-    }
-    
-    private void BtnTopMost_Click(object sender, EventArgs e)
-    {
-        this.TopMost = !this.TopMost;
-        btnTopMost.BackColor = this.TopMost ? Color.FromArgb(100, 100, 100) : Color.FromArgb(50, 50, 50);
-    }
-    
-    private void BtnStartTimerClick(object sender, EventArgs e)
+    private void BtnStart_Click(object sender, EventArgs e)
     {
         if (currentMode == Mode.Timer)
         {
@@ -600,11 +678,10 @@ public class MainForm : Form
             timerStopwatch?.Start();
         }
         
-        btnStartTimer!.Enabled = false;
-        btnPauseTimer!.Enabled = true;
+        UpdateButtonStates();
     }
     
-    private void BtnPauseTimerClick(object sender, EventArgs e)
+    private void BtnPause_Click(object sender, EventArgs e)
     {
         if (currentMode == Mode.Timer)
         {
@@ -615,11 +692,10 @@ public class MainForm : Form
             timerStopwatch?.Stop();
         }
         
-        btnStartTimer!.Enabled = true;
-        btnPauseTimer!.Enabled = false;
+        UpdateButtonStates();
     }
     
-    private void BtnResetTimerClick(object sender, EventArgs e)
+    private void BtnReset_Click(object sender, EventArgs e)
     {
         if (currentMode == Mode.Timer)
         {
@@ -632,9 +708,14 @@ public class MainForm : Form
             stopwatchTime = TimeSpan.Zero;
         }
         
-        btnStartTimer!.Enabled = true;
-        btnPauseTimer!.Enabled = false;
+        UpdateButtonStates();
         UpdateDisplay();
+    }
+    
+    private void BtnTopMost_Click(object sender, EventArgs e)
+    {
+        this.TopMost = !this.TopMost;
+        btnTopMost.BackColor = this.TopMost ? Color.FromArgb(100, 100, 100) : Color.FromArgb(50, 50, 50);
     }
     
     private void TimerMenuItem_Click(object sender, EventArgs e)
@@ -671,18 +752,165 @@ public class MainForm : Form
     #region Display Update
     private void UpdateDisplay()
     {
+        string timeText;
+        
         switch (currentMode)
         {
             case Mode.Clock:
-                lblTime.Text = DateTime.Now.ToString("HH:mm:ss");
+                timeText = DateTime.Now.ToString("HH:mm:ss");
                 break;
             case Mode.Timer:
-                lblTime.Text = countdownTime.ToString(@"hh\:mm\:ss");
+                timeText = countdownTime.ToString(@"hh\:mm\:ss");
                 break;
             case Mode.Stopwatch:
-                lblTime.Text = stopwatchTime.ToString(@"hh\:mm\:ss");
+                timeText = stopwatchTime.ToString(@"hh\:mm\:ss");
+                break;
+            default:
+                timeText = "00:00:00";
                 break;
         }
+        
+        UpdateFlipDigits(timeText);
+    }
+    
+    private void UpdateFlipDigits(string timeText)
+    {
+        // Format should be "HH:MM:SS"
+        if (timeText.Length < 8) return;
+        
+        // Update hours
+        hourDigits[0].Value = timeText[0] - '0';
+        hourDigits[1].Value = timeText[1] - '0';
+        
+        // Update minutes
+        minuteDigits[0].Value = timeText[3] - '0';
+        minuteDigits[1].Value = timeText[4] - '0';
+        
+        // Update seconds
+        secondDigits[0].Value = timeText[6] - '0';
+        secondDigits[1].Value = timeText[7] - '0';
     }
     #endregion
+}
+
+// FlipDigit class to create the flip-clock effect
+public class FlipDigit : Panel
+{
+    private int _value = 0;
+    private Color _backColor = Color.FromArgb(40, 40, 40);
+    private Color _foreColor = Color.White;
+    private Color _lineColor = Color.FromArgb(30, 30, 30);
+    private static readonly Font DEFAULT_FONT = new Font("Consolas", 24, FontStyle.Bold);
+    
+    public int Value
+    {
+        get => _value;
+        set
+        {
+            if (_value != value)
+            {
+                _value = value % 10; // Ensure it's 0-9
+                this.Invalidate();
+            }
+        }
+    }
+    
+    public FlipDigit()
+    {
+        this.DoubleBuffered = true;
+    }
+    
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        base.OnPaint(e);
+        
+        Graphics g = e.Graphics;
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        
+        // Draw background with gradient effect
+        Rectangle rect = new Rectangle(0, 0, this.Width, this.Height);
+        using (var brush = new LinearGradientBrush(
+            rect, 
+            Color.FromArgb(50, 50, 50),
+            Color.FromArgb(30, 30, 30),
+            LinearGradientMode.Vertical))
+        {
+            g.FillRectangle(brush, rect);
+        }
+        
+        // Draw border
+        using (var pen = new Pen(_lineColor, 1))
+        {
+            g.DrawRectangle(pen, 0, 0, this.Width - 1, this.Height - 1);
+        }
+        
+        // Draw middle line
+        int middle = this.Height / 2;
+        using (var pen = new Pen(Color.FromArgb(20, 20, 20), 1))
+        {
+            g.DrawLine(pen, 0, middle, this.Width, middle);
+        }
+        
+        // Upper half gradient (slightly lighter)
+        Rectangle upperRect = new Rectangle(1, 1, this.Width - 2, middle - 1);
+        using (var brush = new LinearGradientBrush(
+            upperRect, 
+            Color.FromArgb(60, 60, 60),
+            Color.FromArgb(40, 40, 40),
+            LinearGradientMode.Vertical))
+        {
+            g.FillRectangle(brush, upperRect);
+        }
+        
+        // Lower half gradient (slightly darker)
+        Rectangle lowerRect = new Rectangle(1, middle + 1, this.Width - 2, this.Height - middle - 2);
+        using (var brush = new LinearGradientBrush(
+            lowerRect, 
+            Color.FromArgb(35, 35, 35),
+            Color.FromArgb(25, 25, 25),
+            LinearGradientMode.Vertical))
+        {
+            g.FillRectangle(brush, lowerRect);
+        }
+        
+        // Определяем размер шрифта в зависимости от размера контрола
+        float fontSize = Math.Min(this.Width * 0.7f, this.Height * 0.6f);
+        
+        // Draw digit with some shadow for 3D effect
+        StringFormat format = new StringFormat
+        {
+            Alignment = StringAlignment.Center,
+            LineAlignment = StringAlignment.Center
+        };
+        
+        // Shadow
+        using (var brush = new SolidBrush(Color.FromArgb(40, 0, 0, 0)))
+        using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
+        {
+            g.DrawString(_value.ToString(), font, brush, 
+                new RectangleF(2, 2, this.Width, this.Height), 
+                format);
+        }
+        
+        // Main digit
+        using (var brush = new SolidBrush(_foreColor))
+        using (var font = new Font(DEFAULT_FONT.FontFamily, fontSize, FontStyle.Bold))
+        {
+            g.DrawString(_value.ToString(), font, brush, 
+                new RectangleF(0, 0, this.Width, this.Height), 
+                format);
+        }
+        
+        // Add reflections for glass-like effect
+        int reflectionHeight = this.Height / 8;
+        Rectangle reflectionRect = new Rectangle(2, 2, this.Width - 4, reflectionHeight);
+        using (var brush = new LinearGradientBrush(
+            reflectionRect,
+            Color.FromArgb(60, 255, 255, 255),
+            Color.FromArgb(0, 255, 255, 255),
+            LinearGradientMode.Vertical))
+        {
+            g.FillRectangle(brush, reflectionRect);
+        }
+    }
 } 
