@@ -258,7 +258,14 @@ public class MainForm : Form
         // Close any existing notification window
         if (notificationForm != null && !notificationForm.IsDisposed)
         {
-            notificationForm.Close();
+            try
+            {
+                notificationForm.Close();
+            }
+            catch (Exception)
+            {
+                // Игнорируем ошибку, если форма уже закрыта
+            }
         }
 
         // Create a custom notification window
@@ -307,15 +314,35 @@ public class MainForm : Form
         
         // Add event handlers
         okButton.Click += (s, e) => {
-            notificationForm.Close();
-            notificationForm = null;
+            try
+            {
+                notificationForm.Close();
+            }
+            catch (Exception)
+            {
+                // Игнорируем ошибку, если форма уже закрыта
+            }
+            finally
+            {
+                notificationForm = null;
+            }
         };
         
         notificationForm.KeyDown += (s, e) => {
             if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space || e.KeyCode == Keys.Escape)
             {
-                notificationForm.Close();
-                notificationForm = null;
+                try
+                {
+                    notificationForm.Close();
+                }
+                catch (Exception)
+                {
+                    // Игнорируем ошибку, если форма уже закрыта
+                }
+                finally
+                {
+                    notificationForm = null;
+                }
             }
         };
         
@@ -333,29 +360,47 @@ public class MainForm : Form
         // Start flashing the notification window in a separate thread
         Thread flashNotificationThread = new Thread(() => {
             Color originalBackColor = notificationForm.BackColor;
+            Color originalTitleBackColor = titleLabel.BackColor;
+            
             for (int i = 0; i < 5; i++)
             {
-                // Sometimes the window may already be closed
-                if (notificationForm.IsDisposed) break;
+                // Check if form is still valid
+                if (notificationForm == null || notificationForm.IsDisposed) break;
                 
-                BeginInvoke(() => {
-                    if (!notificationForm.IsDisposed)
-                    {
-                        notificationForm.BackColor = Color.Red;
-                        titleLabel.BackColor = Color.Red;
-                        Application.DoEvents();
-                    }
-                });
+                try
+                {
+                    // Safely update UI
+                    notificationForm.Invoke((MethodInvoker)delegate {
+                        if (notificationForm != null && !notificationForm.IsDisposed)
+                        {
+                            notificationForm.BackColor = Color.Red;
+                            titleLabel.BackColor = Color.Red;
+                        }
+                    });
+                }
+                catch (Exception)
+                {
+                    break;
+                }
+                
                 Thread.Sleep(300);
                 
-                BeginInvoke(() => {
-                    if (!notificationForm.IsDisposed)
-                    {
-                        notificationForm.BackColor = originalBackColor;
-                        titleLabel.BackColor = originalBackColor;
-                        Application.DoEvents();
-                    }
-                });
+                try
+                {
+                    // Safely update UI
+                    notificationForm.Invoke((MethodInvoker)delegate {
+                        if (notificationForm != null && !notificationForm.IsDisposed)
+                        {
+                            notificationForm.BackColor = originalBackColor;
+                            titleLabel.BackColor = originalTitleBackColor;
+                        }
+                    });
+                }
+                catch (Exception)
+                {
+                    break;
+                }
+                
                 Thread.Sleep(200);
             }
         });
