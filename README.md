@@ -1,9 +1,12 @@
 # WinTimer
 
-A compact widget application for Windows with flip-clock, timer, and stopwatch functionality.
+A compact widget application for Windows with flip-clock, timer, stopwatch and Screen Dimming functionality.
+
+Компактный виджет для Windows с перекидными часами, таймером, секундомером и возможностью затемнять экраны ниже минимального значения яркости монитора.
 
 ![Clock Mode](WinTimer-clock.png)\
-![Timer Mode](WinTimer-countdown.png)
+![Timer Mode](WinTimer-countdown.png)\
+![Screen Dimmer](WinTimer-dimmer.png)
 
 [Русская версия ниже](#wintimer-ru)
 
@@ -126,7 +129,7 @@ dotnet build --configuration Release
 ## Сборка из исходного кода
 
 ```
-git clone https://github.com/yourusername/WinTimer.git
+git clone https://github.com/VirusAlex/WinTimer.git
 cd WinTimer
 dotnet build --configuration Release
 ```
