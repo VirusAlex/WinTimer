@@ -12,7 +12,6 @@ public class MainForm : Form
     private const int BASE_HEIGHT = 220;
     private const int BASE_BUTTON_FONT_SIZE = 14;
     private const int RESIZE_BORDER = 5;
-    private const float ASPECT_RATIO = BASE_WIDTH / (float)BASE_HEIGHT;
     private static readonly Font BUTTON_FONT = new Font("Segoe UI Emoji", BASE_BUTTON_FONT_SIZE, FontStyle.Regular);
     #endregion
     
@@ -48,7 +47,10 @@ public class MainForm : Form
     private Button btnPause;
     private Button btnReset;
     private Button btnTopMost;
+    private Button btnDimmer;
     private Button btnClose;
+    private ContextMenuStrip dimmerMenu;
+    private TrackBar dimmerTrackBar;
 
     // Arrows for timer setup
     private Button[] upArrows;
@@ -69,9 +71,17 @@ public class MainForm : Form
     // Store a reference to the notification window for possible closing
     private Form? notificationForm = null;
     
+    // Store references to all dimmer forms
+    private List<DimmerForm> dimmerForms = new List<DimmerForm>();
+    private bool isDimmed = false;
+    
     // Variables for window dragging
     private bool isDragging = false;
     private Point dragStartPoint;
+
+    // Variables for window state management
+    private Rectangle previousBounds;
+    private bool isMaximized = false;
     #endregion
 
     public MainForm()
@@ -164,21 +174,6 @@ public class MainForm : Form
             if (this.Height < MinimumSize.Height)
                 this.Height = MinimumSize.Height;
             
-            // Maintain aspect ratio
-            float currentRatio = this.Width / (float)this.Height;
-            
-            if (Math.Abs(currentRatio - ASPECT_RATIO) > 0.01f)
-            {
-                if (this.Width != this.RestoreBounds.Width)
-                {
-                    this.Height = (int)(this.Width / ASPECT_RATIO);
-                }
-                else
-                {
-                    this.Width = (int)(this.Height * ASPECT_RATIO);
-                }
-            }
-            
             float scale = this.Width / (float)BASE_WIDTH;
             
             // Scale all controls
@@ -226,6 +221,32 @@ public class MainForm : Form
         control.MouseDown += MainForm_MouseDown;
         control.MouseMove += MainForm_MouseMove;
         control.MouseUp += MainForm_MouseUp;
+    }
+    
+    private void PnlTimeDisplay_DoubleClick(object? sender, EventArgs e)
+    {
+        if (!isMaximized)
+        {
+            // Store current bounds before maximizing
+            previousBounds = this.Bounds;
+            
+            // Get the screen that contains this window
+            Screen currentScreen = Screen.FromControl(this);
+            
+            // Maximize to fill the entire screen
+            this.FormBorderStyle = FormBorderStyle.None;
+            this.Bounds = currentScreen.Bounds;
+            isMaximized = true;
+        }
+        else
+        {
+            // Restore previous size and position
+            this.Bounds = previousBounds;
+            isMaximized = false;
+        }
+        
+        // Update display after changing window size
+        UpdateDisplay();
     }
 
     private void FlashWindow()
@@ -440,7 +461,7 @@ public class MainForm : Form
         this.StartPosition = FormStartPosition.CenterScreen;
         this.BackColor = Color.FromArgb(0, 0, 0); // Fully black background
         this.ForeColor = Color.White;
-        this.MinimumSize = new Size(300, 160); // Decrease minimum size
+        this.MinimumSize = new Size(200, 100); // Decrease minimum size
         this.Padding = new Padding(RESIZE_BORDER);
 
         // Add handlers for window dragging
@@ -465,6 +486,8 @@ public class MainForm : Form
             BackColor = Color.Black // Fully black background
         };
         AddHandlers(pnlTimeDisplay);
+        // Add double-click handler for time display panel
+        pnlTimeDisplay.DoubleClick += PnlTimeDisplay_DoubleClick;
         
         // Create flip digits for HH:MM:SS
         hourDigits = new FlipDigit[2];
@@ -822,12 +845,11 @@ public class MainForm : Form
             pnlControls.Width = ClientSize.Width;
         }
         
-        // Optimize the size of buttons and the distance between them
-        int buttonWidth = (int)(42 * scale);  // Reduced from 45 for space saving
-        int buttonHeight = (int)(35 * scale); 
-        int gap = (int)(8 * scale);          // Reduced from 10 for space saving
+        int buttonWidth = (int)(42 * scale);
+        int buttonHeight = (int)(35 * scale);
+        int gap = (int)(8 * scale);
         
-        int totalWidth = 8 * buttonWidth + 7 * gap;
+        int totalWidth = 9 * buttonWidth + 8 * gap;
         
         // Ensure we have enough width
         int availableWidth = pnlControls.Width - 20; // 10 pixels offset on each side
@@ -838,7 +860,7 @@ public class MainForm : Form
             float reductionFactor = availableWidth / (float)totalWidth;
             buttonWidth = (int)(buttonWidth * reductionFactor);
             gap = (int)(gap * reductionFactor);
-            totalWidth = 8 * buttonWidth + 7 * gap;
+            totalWidth = 9 * buttonWidth + 8 * gap;
         }
         
         int startX = Math.Max(10, (pnlControls.Width - totalWidth) / 2);
@@ -880,6 +902,11 @@ public class MainForm : Form
         btnTopMost.Location = new Point(x, y);
         btnTopMost.Width = buttonWidth;
         btnTopMost.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnDimmer.Location = new Point(x, y);
+        btnDimmer.Width = buttonWidth;
+        btnDimmer.Height = buttonHeight;
         x += buttonWidth + gap;
         
         btnClose.Location = new Point(x, y);
@@ -928,6 +955,7 @@ public class MainForm : Form
         ScaleButton(btnPause, scale);
         ScaleButton(btnReset, scale);
         ScaleButton(btnTopMost, scale);
+        ScaleButton(btnDimmer, scale);
         ScaleButton(btnClose, scale);
         
         // Reposition buttons
@@ -1132,6 +1160,8 @@ public class MainForm : Form
         btnTopMost.BackColor = this.TopMost ? 
             Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent
         
+        btnDimmer.BackColor = isDimmed ? Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent when active
+        
         btnClose.BackColor = Color.FromArgb(20, 20, 20);
         
         // Highlight the text of active buttons
@@ -1139,6 +1169,7 @@ public class MainForm : Form
         btnTimer.ForeColor = currentMode == Mode.Timer ? Color.White : Color.FromArgb(200, 200, 200);
         btnStopwatch.ForeColor = currentMode == Mode.Stopwatch ? Color.White : Color.FromArgb(200, 200, 200);
         btnTopMost.ForeColor = this.TopMost ? Color.White : Color.FromArgb(200, 200, 200);
+        btnDimmer.ForeColor = isDimmed ? Color.White : Color.FromArgb(200, 200, 200);
     }
     #endregion
     
@@ -1218,6 +1249,52 @@ public class MainForm : Form
     {
         this.TopMost = !this.TopMost;
         UpdateButtonStates();
+    }
+
+    private void BtnDimmer_Click(object? sender, EventArgs e)
+    {
+        if (!isDimmed)
+        {
+            // Create and show dimmers for all screens if not already dimmed
+            foreach (Screen screen in Screen.AllScreens)
+            {
+                var dimmerForm = new DimmerForm();
+                
+                // Set the form's bounds to match the screen
+                dimmerForm.StartPosition = FormStartPosition.Manual;
+                dimmerForm.WindowState = FormWindowState.Normal; // Reset state first
+                dimmerForm.FormBorderStyle = FormBorderStyle.None;
+                dimmerForm.Bounds = screen.Bounds;
+                
+                // Show the form and maximize it on the correct screen
+                dimmerForm.Show();
+                dimmerForm.WindowState = FormWindowState.Maximized;
+                
+                dimmerForm.SetOpacity(dimmerTrackBar.Value);
+                dimmerForm.TopMost = true;
+                dimmerForms.Add(dimmerForm);
+            }
+            
+            isDimmed = true;
+            btnDimmer.BackColor = Color.FromArgb(40, 30, 40); // Purple accent when active
+            btnDimmer.ForeColor = Color.White;
+        }
+        else
+        {
+            // Hide and dispose all dimmers
+            foreach (var form in dimmerForms)
+            {
+                if (!form.IsDisposed)
+                {
+                    form.Hide();
+                    form.Dispose();
+                }
+            }
+            dimmerForms.Clear();
+            isDimmed = false;
+            btnDimmer.BackColor = Color.FromArgb(20, 20, 20);
+            btnDimmer.ForeColor = Color.FromArgb(200, 200, 200);
+        }
     }
     #endregion
 
@@ -1365,6 +1442,7 @@ public class MainForm : Form
         btnPause = CreateButton("⏸️");
         btnReset = CreateButton("🔄");
         btnTopMost = CreateButton("📌");
+        btnDimmer = CreateButton("🌓");
         btnClose = CreateButton("✖");
         
         // Add all buttons to panel
@@ -1375,6 +1453,7 @@ public class MainForm : Form
         pnlControls.Controls.Add(btnPause);
         pnlControls.Controls.Add(btnReset);
         pnlControls.Controls.Add(btnTopMost);
+        pnlControls.Controls.Add(btnDimmer);
         pnlControls.Controls.Add(btnClose);
         
         // Position buttons
@@ -1393,8 +1472,57 @@ public class MainForm : Form
         btnTopMost.Click += BtnTopMost_Click;
         btnClose.Click += (s, e) => this.Close();
         
-        // We don't use context menu for timer anymore
-        // InitializeTimerContextMenu();
+        // Create dimmer context menu
+        dimmerMenu = new ContextMenuStrip();
+        dimmerMenu.ShowImageMargin = false;
+        dimmerMenu.BackColor = Color.FromArgb(30, 30, 30);
+        dimmerMenu.ForeColor = Color.White;
+        dimmerMenu.Padding = new Padding(5);
+
+        // Create trackbar
+        dimmerTrackBar = new TrackBar
+        {
+            Minimum = 10,
+            Maximum = 90,
+            Value = 70,
+            TickFrequency = 10,
+            LargeChange = 10,
+            SmallChange = 10,
+            AutoSize = false,
+            Width = 200,
+            Height = 35,
+            BackColor = Color.FromArgb(30, 30, 30),
+            ForeColor = Color.White
+        };
+
+        dimmerTrackBar.ValueChanged += (s, e) => {
+            if (isDimmed)
+            {
+                foreach (var form in dimmerForms)
+                {
+                    if (!form.IsDisposed)
+                    {
+                        form.SetOpacity(dimmerTrackBar.Value);
+                    }
+                }
+            }
+        };
+
+        // Add trackbar to menu
+        ToolStripControlHost trackBarHost = new ToolStripControlHost(dimmerTrackBar);
+        dimmerMenu.Items.Add(trackBarHost);
+
+        // Configure dimmer button behavior
+        btnDimmer.MouseUp += (s, e) => {
+            if (e.Button == MouseButtons.Right)
+            {
+                dimmerMenu.Show(btnDimmer, new Point(-200, btnDimmer.Height - 70));
+            }
+            else if (e.Button == MouseButtons.Left)
+            {
+                BtnDimmer_Click(s, e);
+            }
+        };
     }
 
     private void InitializeTimers()
@@ -1495,6 +1623,20 @@ public class MainForm : Form
         return button;
     }
     #endregion
+
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        base.OnFormClosing(e);
+        // Ensure all dimmer forms are closed
+        foreach (var form in dimmerForms)
+        {
+            if (!form.IsDisposed)
+            {
+                form.Close();
+            }
+        }
+        dimmerForms.Clear();
+    }
 }
 
 // FlipDigit class to create the flip-clock effect

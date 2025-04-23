@@ -1,6 +1,6 @@
 # WinTimer
 
-A compact widget application for Windows with clock, timer, and stopwatch functionality.
+A compact widget application for Windows with flip-clock, timer, and stopwatch functionality.
 
 ![Clock Mode](WinTimer-clock.png)\
 ![Timer Mode](WinTimer-countdown.png)
@@ -18,6 +18,7 @@ A compact widget application for Windows with clock, timer, and stopwatch functi
 - **Always on Top**: Ability to pin the widget on top of other windows
 - **Resizable Interface**: Maintains proper aspect ratio when resized
 - **Intuitive Controls**: Click interface with animation effects
+- **Screen Dimming**: Ability to dim all screens (all monitors) with adjustable opacity levels
 
 ## Special Features
 
@@ -26,6 +27,8 @@ A compact widget application for Windows with clock, timer, and stopwatch functi
 - Mouse-only controls
 - Borderless resizable window
 - Visual and sound notifications when timer completes
+- Screen dimming with adjustable opacity
+- Double-click to toggle fullscreen mode
 
 ## Requirements
 
@@ -47,6 +50,9 @@ A compact widget application for Windows with clock, timer, and stopwatch functi
 - Click ⏲️ to switch to stopwatch mode
 - Use ▶️, ⏸️, and 🔄 buttons to control the timer/stopwatch
 - Click 📌 to toggle always-on-top mode
+- Click 🌓 to toggle screen dimming
+  - Right-click 🌓 to adjust dimming opacity
+- Double-click on time display to toggle fullscreen mode
 - Click ✖ to close the application
 - Drag from any part of the window to move it
 - Drag from edges to resize the window
@@ -77,6 +83,8 @@ dotnet build --configuration Release
 - **Поверх всех окон**: Возможность закрепить виджет поверх других окон
 - **Изменяемый размер интерфейса**: Сохраняет правильное соотношение сторон при изменении размера
 - **Интуитивное управление**: Интерфейс с анимационными эффектами
+- **Затемнение экрана**: Возможность затемнить все экраны (все мониторы) с регулируемой прозрачностью
+
 
 ## Особенности
 
@@ -85,6 +93,8 @@ dotnet build --configuration Release
 - Управление только мышью
 - Окно без рамок с изменяемым размером
 - Визуальные и звуковые уведомления при завершении таймера
+- Затемнение экрана с регулируемой прозрачностью
+- Двойной клик для переключения полноэкранного режима
 
 ## Требования
 
@@ -106,6 +116,9 @@ dotnet build --configuration Release
 - Нажмите ⏲️ для переключения в режим секундомера
 - Используйте кнопки ▶️, ⏸️ и 🔄 для управления таймером/секундомером
 - Нажмите 📌 для переключения режима "поверх всех окон"
+- Нажмите 🌓 для включения затемнения экрана
+  - Правый клик по 🌓 для настройки уровня затемнения
+- Двойной клик по дисплею времени для переключения полноэкранного режима
 - Нажмите ✖ для закрытия приложения
 - Перетаскивайте окно за любую его часть
 - Перетаскивайте за края для изменения размера окна

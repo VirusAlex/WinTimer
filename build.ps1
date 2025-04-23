@@ -14,5 +14,5 @@ Copy-Item "WinTimer/bin/Dependent/WinTimer.exe" "$outputDir/WinTimer-Dependent.e
 
 # Выводим информацию о размерах файлов
 Write-Host "`nFile sizes:"
-Get-Item "$outputDir/WinTimer-Standalone.exe" | Select-Object Name, @{Name="Size(MB)";Expression={$_.Length/1MB}}
-Get-Item "$outputDir/WinTimer-Dependent.exe" | Select-Object Name, @{Name="Size(MB)";Expression={$_.Length/1MB}} 
+Get-Item "$outputDir/WinTimer-Full.exe" | Select-Object Name, @{Name="Size(MB)";Expression={$_.Length/1MB}}
+Get-Item "$outputDir/WinTimer-Light.exe" | Select-Object Name, @{Name="Size(MB)";Expression={$_.Length/1MB}} 
