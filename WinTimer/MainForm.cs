@@ -3,6 +3,8 @@ namespace WinTimer;
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
+using System.Text.Json;
 using System.Windows.Forms;
 
 public class MainForm : Form
@@ -48,9 +50,11 @@ public class MainForm : Form
     private Button btnReset;
     private Button btnTopMost;
     private Button btnDimmer;
+    private Button btnLockPosition;
     private Button btnClose;
     private ContextMenuStrip dimmerMenu;
     private TrackBar dimmerTrackBar;
+    private ToolTip buttonToolTip;
 
     // Arrows for timer setup
     private Button[] upArrows;
@@ -75,6 +79,9 @@ public class MainForm : Form
     private List<DimmerForm> dimmerForms = new List<DimmerForm>();
     private bool isDimmed = false;
     
+    // Lock position state
+    private bool isPositionLocked = false;
+    
     // Variables for window dragging
     private bool isDragging = false;
     private Point dragStartPoint;
@@ -92,6 +99,9 @@ public class MainForm : Form
         
         this.Resize += MainForm_Resize;
         this.Icon = AppIcon.GetAppIcon();
+        
+        // Load saved settings (position, size, state)
+        LoadAndApplySettings();
     }
 
     #region Window Handling
@@ -101,6 +111,12 @@ public class MainForm : Form
         
         if (m.Msg == WM_NCHITTEST)
         {
+            if (isPositionLocked)
+            {
+                base.WndProc(ref m);
+                return;
+            }
+            
             Point pos = new Point(m.LParam.ToInt32());
             pos = this.PointToClient(pos);
             
@@ -131,7 +147,7 @@ public class MainForm : Form
     
     private void MainForm_MouseDown(object? sender, MouseEventArgs e)
     {
-        if (e.Button == MouseButtons.Left)
+        if (e.Button == MouseButtons.Left && !isPositionLocked)
         {
             isDragging = true;
             Point screenPoint = (sender as Control)?.PointToScreen(new Point(e.X, e.Y)) ?? Point.Empty;
@@ -209,7 +225,7 @@ public class MainForm : Form
     private void EnsureButtonsVisible()
     {
         // Check if all buttons are fully visible in the control panel
-        if (btnClose.Right > pnlControls.Width || btnTopMost.Right > pnlControls.Width)
+        if (btnClose.Right > pnlControls.Width || btnLockPosition.Right > pnlControls.Width)
         {
             // If buttons extend beyond the boundaries, reposition them
             LayoutControlPanel(this.Width / (float)BASE_WIDTH);
@@ -258,13 +274,11 @@ public class MainForm : Form
                 BeginInvoke(() =>
                 {
                     BackColor = Color.Red;
-                    Application.DoEvents();
                 });
                 Thread.Sleep(300);
                 
                 BeginInvoke(() => {
                     BackColor = Color.FromArgb(0, 0, 0);
-                    Application.DoEvents();
                 });
                 Thread.Sleep(200);
             }
@@ -379,22 +393,24 @@ public class MainForm : Form
         notificationForm.Show(this);
         
         // Start flashing the notification window in a separate thread
+        var formRef = notificationForm; // Capture reference to avoid race condition
         Thread flashNotificationThread = new Thread(() => {
-            Color originalBackColor = notificationForm.BackColor;
+            if (formRef == null) return;
+            Color originalBackColor = formRef.BackColor;
             Color originalTitleBackColor = titleLabel.BackColor;
             
             for (int i = 0; i < 5; i++)
             {
                 // Check if form is still valid
-                if (notificationForm == null || notificationForm.IsDisposed) break;
+                if (formRef.IsDisposed) break;
                 
                 try
                 {
                     // Safely update UI
-                    notificationForm.Invoke((MethodInvoker)delegate {
-                        if (notificationForm != null && !notificationForm.IsDisposed)
+                    formRef.Invoke((MethodInvoker)delegate {
+                        if (!formRef.IsDisposed)
                         {
-                            notificationForm.BackColor = Color.Red;
+                            formRef.BackColor = Color.Red;
                             titleLabel.BackColor = Color.Red;
                         }
                     });
@@ -409,10 +425,10 @@ public class MainForm : Form
                 try
                 {
                     // Safely update UI
-                    notificationForm.Invoke((MethodInvoker)delegate {
-                        if (notificationForm != null && !notificationForm.IsDisposed)
+                    formRef.Invoke((MethodInvoker)delegate {
+                        if (!formRef.IsDisposed)
                         {
-                            notificationForm.BackColor = originalBackColor;
+                            formRef.BackColor = originalBackColor;
                             titleLabel.BackColor = originalTitleBackColor;
                         }
                     });
@@ -849,7 +865,7 @@ public class MainForm : Form
         int buttonHeight = (int)(35 * scale);
         int gap = (int)(8 * scale);
         
-        int totalWidth = 9 * buttonWidth + 8 * gap;
+        int totalWidth = 10 * buttonWidth + 9 * gap;
         
         // Ensure we have enough width
         int availableWidth = pnlControls.Width - 20; // 10 pixels offset on each side
@@ -860,7 +876,7 @@ public class MainForm : Form
             float reductionFactor = availableWidth / (float)totalWidth;
             buttonWidth = (int)(buttonWidth * reductionFactor);
             gap = (int)(gap * reductionFactor);
-            totalWidth = 9 * buttonWidth + 8 * gap;
+            totalWidth = 10 * buttonWidth + 9 * gap;
         }
         
         int startX = Math.Max(10, (pnlControls.Width - totalWidth) / 2);
@@ -902,6 +918,11 @@ public class MainForm : Form
         btnTopMost.Location = new Point(x, y);
         btnTopMost.Width = buttonWidth;
         btnTopMost.Height = buttonHeight;
+        x += buttonWidth + gap;
+        
+        btnLockPosition.Location = new Point(x, y);
+        btnLockPosition.Width = buttonWidth;
+        btnLockPosition.Height = buttonHeight;
         x += buttonWidth + gap;
         
         btnDimmer.Location = new Point(x, y);
@@ -955,6 +976,7 @@ public class MainForm : Form
         ScaleButton(btnPause, scale);
         ScaleButton(btnReset, scale);
         ScaleButton(btnTopMost, scale);
+        ScaleButton(btnLockPosition, scale);
         ScaleButton(btnDimmer, scale);
         ScaleButton(btnClose, scale);
         
@@ -1083,6 +1105,7 @@ public class MainForm : Form
         btnTimer.Visible = true;
         btnStopwatch.Visible = true;
         btnTopMost.Visible = true;
+        btnLockPosition.Visible = true;
         btnClose.Visible = true;
         
         // Control buttons visibility based on mode
@@ -1160,6 +1183,9 @@ public class MainForm : Form
         btnTopMost.BackColor = this.TopMost ? 
             Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent
         
+        btnLockPosition.BackColor = isPositionLocked ? 
+            Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent
+        
         btnDimmer.BackColor = isDimmed ? Color.FromArgb(40, 30, 40) : Color.FromArgb(20, 20, 20); // Purple accent when active
         
         btnClose.BackColor = Color.FromArgb(20, 20, 20);
@@ -1169,6 +1195,7 @@ public class MainForm : Form
         btnTimer.ForeColor = currentMode == Mode.Timer ? Color.White : Color.FromArgb(200, 200, 200);
         btnStopwatch.ForeColor = currentMode == Mode.Stopwatch ? Color.White : Color.FromArgb(200, 200, 200);
         btnTopMost.ForeColor = this.TopMost ? Color.White : Color.FromArgb(200, 200, 200);
+        btnLockPosition.ForeColor = isPositionLocked ? Color.White : Color.FromArgb(200, 200, 200);
         btnDimmer.ForeColor = isDimmed ? Color.White : Color.FromArgb(200, 200, 200);
     }
     #endregion
@@ -1248,6 +1275,12 @@ public class MainForm : Form
     private void BtnTopMost_Click(object sender, EventArgs e)
     {
         this.TopMost = !this.TopMost;
+        UpdateButtonStates();
+    }
+
+    private void BtnLockPosition_Click(object? sender, EventArgs e)
+    {
+        isPositionLocked = !isPositionLocked;
         UpdateButtonStates();
     }
 
@@ -1442,6 +1475,7 @@ public class MainForm : Form
         btnPause = CreateButton("⏸️");
         btnReset = CreateButton("🔄");
         btnTopMost = CreateButton("📌");
+        btnLockPosition = CreateButton("🔒");
         btnDimmer = CreateButton("🌓");
         btnClose = CreateButton("✖");
         
@@ -1453,6 +1487,7 @@ public class MainForm : Form
         pnlControls.Controls.Add(btnPause);
         pnlControls.Controls.Add(btnReset);
         pnlControls.Controls.Add(btnTopMost);
+        pnlControls.Controls.Add(btnLockPosition);
         pnlControls.Controls.Add(btnDimmer);
         pnlControls.Controls.Add(btnClose);
         
@@ -1470,7 +1505,45 @@ public class MainForm : Form
         btnPause.Click += BtnPause_Click;
         btnReset.Click += BtnReset_Click;
         btnTopMost.Click += BtnTopMost_Click;
+        btnLockPosition.Click += BtnLockPosition_Click;
         btnClose.Click += (s, e) => this.Close();
+        
+        // Setup tooltips for all buttons
+        buttonToolTip = new ToolTip
+        {
+            BackColor = Color.FromArgb(30, 30, 30),
+            ForeColor = Color.White,
+            OwnerDraw = true,
+            InitialDelay = 400,
+            ReshowDelay = 200
+        };
+        buttonToolTip.Draw += (s, e) =>
+        {
+            e.DrawBackground();
+            using (var border = new Pen(Color.FromArgb(60, 60, 60)))
+            {
+                e.Graphics.DrawRectangle(border, new Rectangle(0, 0, e.Bounds.Width - 1, e.Bounds.Height - 1));
+            }
+            using (var brush = new SolidBrush(Color.White))
+            {
+                e.Graphics.DrawString(e.ToolTipText, e.Font!, brush, new PointF(4, 3));
+            }
+        };
+        buttonToolTip.Popup += (s, e) =>
+        {
+            var size = TextRenderer.MeasureText(buttonToolTip.GetToolTip(e.AssociatedControl!), SystemFonts.DefaultFont);
+            e.ToolTipSize = new Size(size.Width + 8, size.Height + 6);
+        };
+        buttonToolTip.SetToolTip(btnClock, "Clock");
+        buttonToolTip.SetToolTip(btnTimer, "Timer");
+        buttonToolTip.SetToolTip(btnStopwatch, "Stopwatch");
+        buttonToolTip.SetToolTip(btnStart, "Start");
+        buttonToolTip.SetToolTip(btnPause, "Pause");
+        buttonToolTip.SetToolTip(btnReset, "Reset");
+        buttonToolTip.SetToolTip(btnTopMost, "Always on Top");
+        buttonToolTip.SetToolTip(btnLockPosition, "Lock Position");
+        buttonToolTip.SetToolTip(btnDimmer, "Screen Dimmer (right-click for settings)");
+        buttonToolTip.SetToolTip(btnClose, "Close");
         
         // Create dimmer context menu
         dimmerMenu = new ContextMenuStrip();
@@ -1595,7 +1668,10 @@ public class MainForm : Form
                 sf.LineAlignment = StringAlignment.Center;
                 
                 RectangleF textRect = new RectangleF(1, -1, button.Width - 1, button.Height - 1);
-                e.Graphics.DrawString(button.Text, button.Font, new SolidBrush(button.ForeColor), textRect, sf);
+                using (var textBrush = new SolidBrush(button.ForeColor))
+                {
+                    e.Graphics.DrawString(button.Text, button.Font, textBrush, textRect, sf);
+                }
             }
         };
         
@@ -1608,7 +1684,9 @@ public class MainForm : Form
             if (button == btnClock && currentMode == Mode.Clock ||
                 button == btnTimer && currentMode == Mode.Timer ||
                 button == btnStopwatch && currentMode == Mode.Stopwatch ||
-                button == btnTopMost && this.TopMost)
+                button == btnTopMost && this.TopMost ||
+                button == btnLockPosition && isPositionLocked ||
+                button == btnDimmer && isDimmed)
             {
                 button.ForeColor = Color.White;
             }
@@ -1624,8 +1702,56 @@ public class MainForm : Form
     }
     #endregion
 
+    private void LoadAndApplySettings()
+    {
+        var settings = AppSettings.Load();
+        if (settings == null) return;
+        
+        // Validate that saved position is on a visible screen
+        var savedBounds = new Rectangle(settings.X, settings.Y, settings.Width, settings.Height);
+        bool isOnScreen = false;
+        foreach (Screen screen in Screen.AllScreens)
+        {
+            if (screen.WorkingArea.IntersectsWith(savedBounds))
+            {
+                isOnScreen = true;
+                break;
+            }
+        }
+        
+        if (isOnScreen)
+        {
+            this.StartPosition = FormStartPosition.Manual;
+            this.Location = new Point(settings.X, settings.Y);
+        }
+        
+        this.Size = new Size(
+            Math.Max(settings.Width, MinimumSize.Width),
+            Math.Max(settings.Height, MinimumSize.Height)
+        );
+        
+        this.TopMost = settings.TopMost;
+        isPositionLocked = settings.PositionLocked;
+        dimmerTrackBar.Value = Math.Clamp(settings.DimmerOpacity, dimmerTrackBar.Minimum, dimmerTrackBar.Maximum);
+        
+        UpdateButtonStates();
+    }
+
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
+        // Save settings before closing
+        var settings = new AppSettings
+        {
+            X = this.Location.X,
+            Y = this.Location.Y,
+            Width = this.Size.Width,
+            Height = this.Size.Height,
+            TopMost = this.TopMost,
+            PositionLocked = isPositionLocked,
+            DimmerOpacity = dimmerTrackBar.Value
+        };
+        settings.Save();
+        
         base.OnFormClosing(e);
         // Ensure all dimmer forms are closed
         foreach (var form in dimmerForms)
@@ -1636,6 +1762,58 @@ public class MainForm : Form
             }
         }
         dimmerForms.Clear();
+    }
+}
+
+public class AppSettings
+{
+    public int X { get; set; }
+    public int Y { get; set; }
+    public int Width { get; set; } = 420;
+    public int Height { get; set; } = 220;
+    public bool TopMost { get; set; }
+    public bool PositionLocked { get; set; }
+    public int DimmerOpacity { get; set; } = 70;
+
+    private static string SettingsPath
+    {
+        get
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            return Path.Combine(appData, "WinTimer", "settings.json");
+        }
+    }
+
+    public static AppSettings? Load()
+    {
+        try
+        {
+            if (File.Exists(SettingsPath))
+            {
+                string json = File.ReadAllText(SettingsPath);
+                return JsonSerializer.Deserialize<AppSettings>(json);
+            }
+        }
+        catch
+        {
+            // Ignore errors, return null to use defaults
+        }
+        return null;
+    }
+
+    public void Save()
+    {
+        try
+        {
+            string? dir = Path.GetDirectoryName(SettingsPath);
+            if (dir != null) Directory.CreateDirectory(dir);
+            string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(SettingsPath, json);
+        }
+        catch
+        {
+            // Ignore save errors silently
+        }
     }
 }
 
@@ -1719,7 +1897,7 @@ public class FlipDigit : Panel
         Rectangle rect = new Rectangle(0, 0, this.Width, this.Height);
         
         // Rounded corners for digits
-        GraphicsPath path = CreateRoundedRectangle(rect, 6);
+        using GraphicsPath path = CreateRoundedRectangle(rect, 6);
         
         // Main background (dark background)
         using (var brush = new SolidBrush(_backColor))
@@ -1736,7 +1914,7 @@ public class FlipDigit : Panel
             LinearGradientMode.Vertical))
         {
             // Create path for upper half with rounded top corners
-            GraphicsPath upperPath = new GraphicsPath();
+            using GraphicsPath upperPath = new GraphicsPath();
             upperPath.AddArc(0, 0, 12, 12, 180, 90); // Top left corner
             upperPath.AddArc(rect.Width - 12, 0, 12, 12, 270, 90); // Top right corner
             upperPath.AddLine(rect.Width, rect.Height / 2, 0, rect.Height / 2);
@@ -1754,7 +1932,7 @@ public class FlipDigit : Panel
             LinearGradientMode.Vertical))
         {
             // Create path for lower half with rounded bottom corners
-            GraphicsPath lowerPath = new GraphicsPath();
+            using GraphicsPath lowerPath = new GraphicsPath();
             lowerPath.AddLine(0, rect.Height / 2, rect.Width, rect.Height / 2);
             lowerPath.AddLine(rect.Width, rect.Height / 2, rect.Width, rect.Height - 6);
             lowerPath.AddArc(rect.Width - 12, rect.Height - 12, 12, 12, 0, 90); // Bottom right corner
@@ -1784,7 +1962,7 @@ public class FlipDigit : Panel
         
         // Drawing digit separately for upper and lower halves
         float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f);
-        StringFormat format = new StringFormat
+        using StringFormat format = new StringFormat
         {
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center
@@ -1835,7 +2013,7 @@ public class FlipDigit : Panel
         g.ResetClip();
         
         // Create upper path for correct clipping of glow
-        GraphicsPath upperClipPath = new GraphicsPath();
+        using GraphicsPath upperClipPath = new GraphicsPath();
         upperClipPath.AddArc(0, 0, 12, 12, 180, 90);
         upperClipPath.AddArc(rect.Width - 12, 0, 12, 12, 270, 90);
         upperClipPath.AddLine(rect.Width, rect.Height / 2, 0, rect.Height / 2);
@@ -1875,7 +2053,7 @@ public class FlipDigit : Panel
     private void PaintFlippingDigit(Graphics g)
     {
         TimeSpan elapsed = DateTime.Now - _flipStartTime;
-        double progress = Math.Min(1.0, elapsed.TotalMilliseconds / FLIP_DURATION_MS);
+        double progress = Math.Clamp(elapsed.TotalMilliseconds / FLIP_DURATION_MS, 0.0, 1.0);
         
         int halfHeight = this.Height / 2;
         
@@ -1923,6 +2101,7 @@ public class FlipDigit : Panel
     private void PaintFoldingBottomDown(Graphics g, double angle)
     {
         int halfHeight = this.Height / 2;
+        if (this.Width <= 0 || halfHeight <= 0) return;
         
         // Create temporary bitmap for lower half of NEW digit
         using (Bitmap bmp = new Bitmap(this.Width, halfHeight))
@@ -1937,7 +2116,7 @@ public class FlipDigit : Panel
             Rectangle tempRect = new Rectangle(0, 0, this.Width, halfHeight);
             
             // Create path for lower half
-            GraphicsPath path = new GraphicsPath();
+            using GraphicsPath path = new GraphicsPath();
             path.AddLine(0, 0, tempRect.Width, 0);
             path.AddLine(tempRect.Width, 0, tempRect.Width, tempRect.Height - 6);
             path.AddArc(tempRect.Width - 12, tempRect.Height - 12, 12, 12, 0, 90); // Bottom right corner
@@ -1962,7 +2141,7 @@ public class FlipDigit : Panel
             
             // Draw digit
             float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Increased font size
-            StringFormat format = new StringFormat
+            using StringFormat format = new StringFormat
             {
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
@@ -2005,7 +2184,7 @@ public class FlipDigit : Panel
             g.DrawImage(bmp, destPoints);
             
             // Add shadow for 3D effect (less shadow as it folds)
-            int shadowAlpha = (int)(150 * (1.0 - Math.Sin(angle * Math.PI / 180.0)));
+            int shadowAlpha = Math.Clamp((int)(150 * (1.0 - Math.Sin(angle * Math.PI / 180.0))), 0, 255);
             using (var brush = new SolidBrush(Color.FromArgb(shadowAlpha, 0, 0, 0)))
             {
                 g.FillPolygon(brush, destPoints);
@@ -2025,7 +2204,7 @@ public class FlipDigit : Panel
     private void PaintStaticHalfDigit(Graphics g, Rectangle rect, int digit, bool isTopHalf)
     {
         // Create path with rounded corners for half
-        GraphicsPath path = new GraphicsPath();
+        using GraphicsPath path = new GraphicsPath();
         
         if (isTopHalf)
         {
@@ -2072,7 +2251,7 @@ public class FlipDigit : Panel
         RectangleF fullRect = new RectangleF(0, 3, this.Width, this.Height); // Shift text down
         
         // Formatting text
-        StringFormat format = new StringFormat
+        using StringFormat format = new StringFormat
         {
             Alignment = StringAlignment.Center,
             LineAlignment = StringAlignment.Center
@@ -2133,6 +2312,7 @@ public class FlipDigit : Panel
     private void PaintFoldingTopDown(Graphics g, double angle)
     {
         int halfHeight = this.Height / 2;
+        if (this.Width <= 0 || halfHeight <= 0) return;
         
         // Create temporary bitmap for upper half of old digit
         using (Bitmap bmp = new Bitmap(this.Width, halfHeight))
@@ -2147,7 +2327,7 @@ public class FlipDigit : Panel
             Rectangle tempRect = new Rectangle(0, 0, this.Width, halfHeight);
             
             // Create path for upper half
-            GraphicsPath path = new GraphicsPath();
+            using GraphicsPath path = new GraphicsPath();
             path.AddArc(0, 0, 12, 12, 180, 90); // Top left corner
             path.AddArc(tempRect.Width - 12, 0, 12, 12, 270, 90); // Top right corner
             path.AddLine(tempRect.Width, tempRect.Height, 0, tempRect.Height);
@@ -2171,7 +2351,7 @@ public class FlipDigit : Panel
             
             // Draw digit
             float fontSize = Math.Min(this.Width * 0.85f, this.Height * 0.85f); // Increased font size
-            StringFormat format = new StringFormat
+            using StringFormat format = new StringFormat
             {
                 Alignment = StringAlignment.Center,
                 LineAlignment = StringAlignment.Center
@@ -2222,7 +2402,7 @@ public class FlipDigit : Panel
             g.DrawImage(bmp, destPoints);
             
             // Add shadow depending on rotation angle
-            int shadowAlpha = (int)(150 * (1.0 - Math.Cos(angle * Math.PI / 180.0)));
+            int shadowAlpha = Math.Clamp((int)(150 * (1.0 - Math.Cos(angle * Math.PI / 180.0))), 0, 255);
             using (var brush = new SolidBrush(Color.FromArgb(shadowAlpha, 0, 0, 0)))
             {
                 g.FillPolygon(brush, destPoints);

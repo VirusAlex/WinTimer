@@ -1,4 +1,4 @@
-﻿___
+___
 > v1.0.0
 
 # WinTimer v1.0.0
@@ -114,3 +114,33 @@ No installation required - simply download the appropriate executable and run it
 Установка не требуется - просто скачайте соответствующий исполняемый файл и запустите его:
 - Используйте [WinTimer-Full.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.2/WinTimer-Full.exe), если у вас не установлен .NET 8.0
 - Используйте [WinTimer-Light.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.2/WinTimer-Light.exe), если у вас уже установлен .NET 8.0, для экономии места на диске
+
+___
+> v1.0.3
+# WinTimer v1.0.3
+
+## Changelog
+- Window position, size and settings are now saved between sessions (stored in `%AppData%\WinTimer`)
+- Added Lock Position button to prevent accidental window dragging and resizing
+- Added tooltips for all buttons, including a clear description for the Screen Dimmer
+- Fixed a crash caused by invalid color alpha values during flip animation
+
+## Downloads and Installation
+No installation required - simply download the appropriate executable and run it:
+- Use [WinTimer-Full.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.3/WinTimer-Full.exe) if you don't have .NET 8.0 installed
+- Use [WinTimer-Light.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.3/WinTimer-Light.exe) if you already have .NET 8.0 for a smaller download size
+
+---
+
+# WinTimer v1.0.3
+
+## Изменения
+- Позиция, размер окна и настройки теперь сохраняются между сессиями (в `%AppData%\WinTimer`)
+- Добавлена кнопка блокировки позиции для защиты от случайного перемещения и изменения размера окна
+- Добавлены тултипы для всех кнопок, включая понятное описание диммера экрана
+- Исправлен краш из-за некорректного значения alpha при анимации перелистывания
+
+## Загрузка и Установка
+Установка не требуется - просто скачайте соответствующий исполняемый файл и запустите его:
+- Используйте [WinTimer-Full.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.3/WinTimer-Full.exe), если у вас не установлен .NET 8.0
+- Используйте [WinTimer-Light.exe](https://github.com/VirusAlex/WinTimer/releases/download/v1.0.3/WinTimer-Light.exe), если у вас уже установлен .NET 8.0, для экономии места на диске
